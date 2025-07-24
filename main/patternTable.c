@@ -8,6 +8,7 @@
 
 #define TAG1 "sdspi"
 #define TAG2 "FrameReader"
+#define TAG3 "Playback"
 #define MOUNT_POINT "/sdcard"
 
 #define PIN_NUM_MISO  19
@@ -85,6 +86,12 @@ Frame *frame_queue_pop(FrameQueue *q) {
 size_t frame_queue_size(FrameQueue *q) {
     return q->size;
 }
+
+esp_timer_handle_t led_timer;
+FrameQueue light_table;
+bool play_start_flag = false;
+
+SemaphoreHandle_t LED_play;
 
 void initialize(){
     esp_err_t ret;
@@ -201,8 +208,8 @@ void end_realease(){
     spi_bus_free(host.slot);
 }
 
-void refill_task(FrameQueue *queue) {
-
+void refill_task(void *arg) {
+    FrameQueue *queue = (FrameQueue *)arg;
     FILE *f = fopen("/sdcard/table.bin", "rb");
     if (!f) {
         ESP_LOGE(TAG2, "Failed to open animation file");
@@ -221,6 +228,9 @@ void refill_task(FrameQueue *queue) {
             }
         }
 
+        if(queue->size == 2){
+            play_start_flag = true;
+        }
         vTaskDelay(pdMS_TO_TICKS(5));  // 微休息
     }
 
@@ -228,14 +238,69 @@ void refill_task(FrameQueue *queue) {
     vTaskDelete(NULL);
 }
 
+void playback_task(void *arg) {
+    FrameQueue *queue = (FrameQueue *)arg;
+
+    while (1) {
+        if (xSemaphoreTake(LED_play, portMAX_DELAY) == pdTRUE) {
+            Frame *frame = frame_queue_pop(queue);
+            if (frame) {
+                push_leds_to_strip(frame->updates, frame->num_leds_changed);
+                free(frame);
+            } else {
+                ESP_LOGW(TAG3, "No frame available!");
+                vTaskDelete(NULL);
+            }
+        }
+    }
+}
+
+void IRAM_ATTR led_timer_callback(void *arg) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // 發出播放請求
+    xSemaphoreGiveFromISR(LED_play, &xHigherPriorityTaskWoken);
+
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR(); // 如果有高優先權任務要切換
+    }
+}
+
+
+void start_led_timer(FrameQueue *queue) {
+    const esp_timer_create_args_t timer_args = {
+        .callback = led_timer_callback,
+        .arg = queue,                   // 傳入 frame queue
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "led_frame_timer"
+    };
+
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &led_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(led_timer, 20000));  // 每 20,000 us = 20ms
+}
+
+void stop_led_timer() {
+    if (led_timer) {
+        esp_timer_stop(led_timer);
+        esp_timer_delete(led_timer);
+        led_timer = NULL;
+    }
+}
 
 void app_main(void)
 {
-
+    
     initialize();
+    LED_play = xSemaphoreCreateBinary();
 
-    xTaskCreate(playback_task, "Playback", 4096, &queue, 5, NULL);
-    xTaskCreate(refill_task, "Refill", 4096, &queue, 4, NULL);
+    xTaskCreate(playback_task, "Playback", 4096, &light_table, 5, NULL);
+    xTaskCreate(refill_task, "Refill", 4096, &light_table, 4, NULL);
+    while(!play_start_flag){
+        vTaskDelay(1);
+    }
+    start_led_timer(&light_table);
+    
+    stop_led_timer();
     endRealease();
 
 
