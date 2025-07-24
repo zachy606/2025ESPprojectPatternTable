@@ -4,7 +4,7 @@
 #include "driver/spi_master.h"
 #include "sdmmc_cmd.h"
 #include "driver/gpio.h"
-
+#include "esp_timer.h"
 
 #define TAG1 "sdspi"
 #define TAG2 "FrameReader"
@@ -18,33 +18,35 @@
 
 #define SPI_DMA_CHAN  1
 
-struct FileHeader {
+typedef struct FileHeader{
     uint32_t num_frames;     // Total number of frames
     uint16_t num_leds;       // Total number of LEDs in the strip
     uint16_t reserved;       // Reserved (set to 0)
-};
+} FileHeader;
 
-struct LEDUpdate {
+typedef struct LEDUpdate {
     uint16_t led_index;
     uint8_t r, g, b;
-};
+} LEDUpdate;
 
-struct Frame {
+
+
+typedef struct Frame {
     uint32_t timestamp_ms;       // Time to display this frame (ms)
     uint16_t num_leds_changed;   // How many LEDs changed
     struct LEDUpdate updates[];
-};
+} Frame ;
 
-struct FrameNode {
+typedef struct FrameNode{
     struct FrameNode *next;
     Frame *frame;
-};
+} FrameNode;
 
-struct FrameQueue {
+typedef struct FrameQueue  {
     FrameNode *head;
     FrameNode *tail;
     size_t size; 
-};
+} FrameQueue ;
 
 void init_frame_queue(FrameQueue *q) {
     q->head = NULL;
@@ -93,6 +95,12 @@ bool play_start_flag = false;
 
 SemaphoreHandle_t LED_play;
 
+
+sdmmc_card_t* card = NULL;                       // SD 卡描述結構
+const char mount_point[] = MOUNT_POINT;   // 掛載點，如 "/sdcard"
+// 使用 SDSPI host (預設為 SPI2_HOST)
+sdmmc_host_t host;
+
 void initialize(){
     esp_err_t ret;
 
@@ -103,8 +111,8 @@ void initialize(){
         .allocation_unit_size = 16 * 1024     // 分配單位大小 (效能優化)
     };
 
-    sdmmc_card_t* card;                       // SD 卡描述結構
-    const char mount_point[] = MOUNT_POINT;   // 掛載點，如 "/sdcard"
+    // sdmmc_card_t* card;                       // SD 卡描述結構
+    // const char mount_point[] = MOUNT_POINT;   // 掛載點，如 "/sdcard"
 
     ESP_LOGI(TAG1, "Initializing SD card");
 
@@ -112,7 +120,7 @@ void initialize(){
     ESP_LOGI(TAG1, "Using SPI peripheral");
 
     // 使用 SDSPI host (預設為 SPI2_HOST)
-    sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+    host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
 
     // 配置 SPI 線路對應的 GPIO 腳位
     spi_bus_config_t bus_cfg = {
@@ -159,7 +167,7 @@ void initialize(){
 
 bool read_frame(FILE *f, Frame **out_frame){
 
-    for(int i=0;i<header.num_frames;i++){
+    
 
         uint32_t timestamp_ms;
         uint16_t num_leds_changed;
@@ -192,7 +200,7 @@ bool read_frame(FILE *f, Frame **out_frame){
             free(frame);
             return false;
         }
-    } 
+    
 
     *out_frame = frame;
     return true;
@@ -201,12 +209,47 @@ bool read_frame(FILE *f, Frame **out_frame){
 
 void end_realease(){
     //結束釋放資源
+
     esp_vfs_fat_sdcard_unmount(mount_point, card);
-    ESP_LOGI(TAG, "Card unmounted");
+    ESP_LOGI(TAG1, "Card unmounted");
 
     // 卸載 SPI bus 資源
     spi_bus_free(host.slot);
 }
+
+
+void IRAM_ATTR led_timer_callback(void *arg) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // 發出播放請求
+    xSemaphoreGiveFromISR(LED_play, &xHigherPriorityTaskWoken);
+
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR(); // 如果有高優先權任務要切換
+    }
+}
+
+
+void start_led_timer(FrameQueue *queue) {
+    const esp_timer_create_args_t timer_args = {
+        .callback = led_timer_callback,
+        .arg = queue,                   // 傳入 frame queue
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "led_frame_timer"
+    };
+
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &led_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(led_timer, 20000));  // 每 20,000 us = 20ms
+}
+
+void stop_led_timer(void) {
+    if (led_timer) {
+        esp_timer_stop(led_timer);
+        esp_timer_delete(led_timer);
+        led_timer = NULL;
+    }
+}
+
 
 void refill_task(void *arg) {
     FrameQueue *queue = (FrameQueue *)arg;
@@ -238,57 +281,27 @@ void refill_task(void *arg) {
     vTaskDelete(NULL);
 }
 
-void playback_task(void *arg) {
+void playback_task(void *arg) { 
     FrameQueue *queue = (FrameQueue *)arg;
 
     while (1) {
         if (xSemaphoreTake(LED_play, portMAX_DELAY) == pdTRUE) {
             Frame *frame = frame_queue_pop(queue);
             if (frame) {
-                push_leds_to_strip(frame->updates, frame->num_leds_changed);
+                //for LED
                 free(frame);
             } else {
                 ESP_LOGW(TAG3, "No frame available!");
+                stop_led_timer();
                 vTaskDelete(NULL);
+                
             }
         }
     }
 }
 
-void IRAM_ATTR led_timer_callback(void *arg) {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-    // 發出播放請求
-    xSemaphoreGiveFromISR(LED_play, &xHigherPriorityTaskWoken);
-
-    if (xHigherPriorityTaskWoken) {
-        portYIELD_FROM_ISR(); // 如果有高優先權任務要切換
-    }
-}
-
-
-void start_led_timer(FrameQueue *queue) {
-    const esp_timer_create_args_t timer_args = {
-        .callback = led_timer_callback,
-        .arg = queue,                   // 傳入 frame queue
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "led_frame_timer"
-    };
-
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &led_timer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(led_timer, 20000));  // 每 20,000 us = 20ms
-}
-
-void stop_led_timer() {
-    if (led_timer) {
-        esp_timer_stop(led_timer);
-        esp_timer_delete(led_timer);
-        led_timer = NULL;
-    }
-}
-
-void app_main(void)
-{
+void app_main(void){
     
     initialize();
     LED_play = xSemaphoreCreateBinary();
@@ -300,8 +313,8 @@ void app_main(void)
     }
     start_led_timer(&light_table);
     
-    stop_led_timer();
-    endRealease();
+    
+    end_realease();
 
 
 
