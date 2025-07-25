@@ -4,7 +4,10 @@
 #include "driver/spi_master.h"
 #include "sdmmc_cmd.h"
 #include "driver/gpio.h"
-#include "esp_timer.h"
+#include "driver/timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 
 #define TAG1 "sdspi"
 #define TAG2 "FrameReader"
@@ -89,10 +92,9 @@ size_t frame_queue_size(FrameQueue *q) {
     return q->size;
 }
 
-esp_timer_handle_t led_timer;
 FrameQueue light_table;
 bool play_start_flag = false;
-
+FileHeader file_header;
 SemaphoreHandle_t LED_play;
 
 
@@ -102,6 +104,9 @@ const char mount_point[] = MOUNT_POINT;   // 掛載點，如 "/sdcard"
 sdmmc_host_t host;
 
 void initialize(){
+    
+    LED_play = xSemaphoreCreateBinary();//LED_timer
+
     esp_err_t ret;
 
     // 掛載 FAT 檔案系統的設定
@@ -129,7 +134,7 @@ void initialize(){
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 4000,
+        .max_transfer_sz = 8192 ,
     };
 
     // 初始化 SPI bus
@@ -166,8 +171,6 @@ void initialize(){
 
 
 bool read_frame(FILE *f, Frame **out_frame){//3ms
-
-    
 
     uint32_t timestamp_ms;
     uint16_t num_leds_changed;
@@ -217,48 +220,64 @@ void end_realease(){
     spi_bus_free(host.slot);
 }
 
-
-void IRAM_ATTR led_timer_callback(void *arg) {
+bool IRAM_ATTR led_timer_isr(void *arg) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-    // 發出播放請求
     xSemaphoreGiveFromISR(LED_play, &xHigherPriorityTaskWoken);
-
-    if (xHigherPriorityTaskWoken) {
-        portYIELD_FROM_ISR(); // 如果有高優先權任務要切換
-    }
+    return xHigherPriorityTaskWoken == pdTRUE;
 }
 
+void initialize_led_timer(){
 
-void start_led_timer(FrameQueue *queue) {
-    const esp_timer_create_args_t timer_args = {
-        .callback = led_timer_callback,
-        .arg = queue,                   // 傳入 frame queue
-        .dispatch_method = ESP_TIMER_TASK,//及時操作，可能中斷其他程序 ESP_TIMER_TASK
-        .name = "led_frame_timer"
+    timer_config_t config = {
+        .divider = 80,                     // 1 us per tick (80MHz APB / 80 = 1MHz)
+        .counter_dir = TIMER_COUNT_UP,
+        .alarm_en = TIMER_ALARM_EN,
+        .auto_reload = true,
+        .intr_type = TIMER_INTR_LEVEL
     };
+    timer_init(TIMER_GROUP_0, TIMER_0, &config);
 
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &led_timer));
-    led_timer_callback(queue);
-    ESP_ERROR_CHECK(esp_timer_start_periodic(led_timer, 20000));  // 每 20,000 us = 20ms
+    // 20,000 us = 20ms
+    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, 20000);
+    timer_enable_intr(TIMER_GROUP_0, TIMER_0);
+    timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, led_timer_isr, NULL, 0);
+}
+void start_led_timer(FrameQueue *queue) {
+    
+    xSemaphoreGive(LED_play); //first frame
+    ESP_LOGW(TAG2, "first frame start, 0ms");
+    timer_start(TIMER_GROUP_0, TIMER_0);
 }
 
-void stop_led_timer(void) {
-    if (led_timer) {
-        esp_timer_stop(led_timer);
-        esp_timer_delete(led_timer);
-        led_timer = NULL;
-    }
-}
+void stop_led_timer(void){
+    // 1. 暫停 timer
+    timer_pause(TIMER_GROUP_0, TIMER_0);
 
+    // 2. 禁用中斷
+    timer_disable_intr(TIMER_GROUP_0, TIMER_0);
+
+    // 3. 移除 ISR callback（避免殘留）
+    timer_isr_callback_remove(TIMER_GROUP_0, TIMER_0);
+
+    // 4. 重設 counter（選擇性）
+    timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
+}
 
 void refill_task(void *arg) {
+
     FrameQueue *queue = (FrameQueue *)arg;
     FILE *f = fopen("/sdcard/table.bin", "rb");
     if (!f) {
         ESP_LOGE(TAG2, "Failed to open animation file");
         vTaskDelete(NULL);
     }
+
+    //read file header
+    if (fread(&file_header, sizeof(FileHeader), 1, f) != 1) {
+        ESP_LOGE(TAG2, "Failed to read header!");
+        vTaskDelete(NULL);
+    }
+
 
     while (1) {
         if (queue->size < 2) {
@@ -267,7 +286,7 @@ void refill_task(void *arg) {
                 frame_queue_push(queue, frame);
             } else {
                 ESP_LOGW(TAG2, "No more frames (EOF or error)");
-                // Option: rewind(f);
+               
                 break;
             }
         }
@@ -275,7 +294,7 @@ void refill_task(void *arg) {
         if(queue->size == 2){
             play_start_flag = true;
         }
-        vTaskDelay(pdMS_TO_TICKS(5));  // 微休息
+        vTaskDelay(pdMS_TO_TICKS(5));  // 微休息，必要?
     }
 
     fclose(f);
@@ -305,7 +324,7 @@ void playback_task(void *arg) {
 void app_main(void){
     
     initialize();
-    LED_play = xSemaphoreCreateBinary();
+    initialize_led_timer();
 
     xTaskCreate(playback_task, "Playback", 4096, &light_table, 5, NULL);
     xTaskCreate(refill_task, "Refill", 4096, &light_table, 4, NULL);
