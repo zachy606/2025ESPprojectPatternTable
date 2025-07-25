@@ -165,42 +165,42 @@ void initialize(){
 }
 
 
-bool read_frame(FILE *f, Frame **out_frame){
+bool read_frame(FILE *f, Frame **out_frame){//3ms
 
     
 
-        uint32_t timestamp_ms;
-        uint16_t num_leds_changed;
+    uint32_t timestamp_ms;
+    uint16_t num_leds_changed;
 
-        // 1. 先讀取前6 bytes（timestamp + num_leds_changed）
-        if (fread(&timestamp_ms, sizeof(uint32_t), 1, f) != 1)
-            return false;
-        if (fread(&num_leds_changed, sizeof(uint16_t), 1, f) != 1)
-            return false;
+    // 1. 先讀取前6 bytes（timestamp + num_leds_changed）
+    if (fread(&timestamp_ms, sizeof(uint32_t), 1, f) != 1)
+        return false;
+    if (fread(&num_leds_changed, sizeof(uint16_t), 1, f) != 1)
+        return false;
 
-        // 2. 計算整個 Frame 所需記憶體大小
-        size_t frame_size = sizeof(Frame) + num_leds_changed * sizeof(LEDUpdate);
+    // 2. 計算整個 Frame 所需記憶體大小
+    size_t frame_size = sizeof(Frame) + num_leds_changed * sizeof(LEDUpdate);
 
-        // 3. 分配 Frame 記憶體
-        Frame *frame = malloc(frame_size);
-        if (!frame){
-            ESP_LOGE(TAG2, "Failed to allocate memory for Frame (%zu bytes)", frame_size);
-            return false;
-        } 
+    // 3. 分配 Frame 記憶體
+    Frame *frame = malloc(frame_size);
+    if (!frame){
+        ESP_LOGE(TAG2, "Failed to allocate memory for Frame (%zu bytes)", frame_size);
+        return false;
+    } 
 
-        frame->timestamp_ms = timestamp_ms;
-        frame->num_leds_changed = num_leds_changed;
-        if (fread(frame->updates, sizeof(LEDUpdate), num_leds_changed, f) != num_leds_changed) {
+    frame->timestamp_ms = timestamp_ms;
+    frame->num_leds_changed = num_leds_changed;
+    if (fread(frame->updates, sizeof(LEDUpdate), num_leds_changed, f) != num_leds_changed) {
 
-        ESP_LOGE(TAG2, "Failed to read updates[] (expected %u entries, size %zu). "
-                    "ftell=%ld, feof=%d, ferror=%d",
-                    num_leds_changed,
-                    sizeof(LEDUpdate),
-                    ftell(f), feof(f), ferror(f));
-            free(frame);
-            return false;
-        }
-    
+    ESP_LOGE(TAG2, "Failed to read updates[] (expected %u entries, size %zu). "
+                "ftell=%ld, feof=%d, ferror=%d",
+                num_leds_changed,
+                sizeof(LEDUpdate),
+                ftell(f), feof(f), ferror(f));
+        free(frame);
+        return false;
+    }
+
 
     *out_frame = frame;
     return true;
@@ -234,11 +234,12 @@ void start_led_timer(FrameQueue *queue) {
     const esp_timer_create_args_t timer_args = {
         .callback = led_timer_callback,
         .arg = queue,                   // 傳入 frame queue
-        .dispatch_method = ESP_TIMER_TASK,
+        .dispatch_method = ESP_TIMER_TASK,//及時操作，可能中斷其他程序 ESP_TIMER_TASK
         .name = "led_frame_timer"
     };
 
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &led_timer));
+    led_timer_callback(queue);
     ESP_ERROR_CHECK(esp_timer_start_periodic(led_timer, 20000));  // 每 20,000 us = 20ms
 }
 
