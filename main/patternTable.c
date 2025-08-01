@@ -7,6 +7,7 @@
 #include "driver/timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include <processthreadsapi.h>
 
 
 #define TAG1 "sdspi"
@@ -31,8 +32,6 @@ typedef struct LEDUpdate {
     uint16_t led_index;
     uint8_t r, g, b;
 } LEDUpdate;
-
-
 
 typedef struct Frame {
     uint32_t timestamp_ms;       // Time to display this frame (ms)
@@ -169,7 +168,6 @@ void initialize(){
     sdmmc_card_print_info(stdout, card);
 }
 
-
 bool read_frame(FILE *f, Frame **out_frame){//3ms
 
     uint32_t timestamp_ms;
@@ -195,7 +193,7 @@ bool read_frame(FILE *f, Frame **out_frame){//3ms
     frame->num_leds_changed = num_leds_changed;
     if (fread(frame->updates, sizeof(LEDUpdate), num_leds_changed, f) != num_leds_changed) {
 
-    ESP_LOGE(TAG2, "Failed to read updates[] (expected %u entries, size %zu). "
+        ESP_LOGE(TAG2, "Failed to read updates[] (expected %u entries, size %zu). "
                 "ftell=%ld, feof=%d, ferror=%d",
                 num_leds_changed,
                 sizeof(LEDUpdate),
@@ -262,6 +260,7 @@ void stop_led_timer(void){
     // 4. 重設 counter（選擇性）
     timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
 }
+
 
 void refill_task(void *arg) {
 
