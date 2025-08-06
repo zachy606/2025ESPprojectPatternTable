@@ -10,6 +10,7 @@
 #include "freertos/task.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define TAG1 "sdspi"
 #define TAG2 "FrameReader"
@@ -98,8 +99,12 @@ typedef enum {
 } PlayerState;
 
 volatile PlayerState current_state = PLAYER_STOPPED;
+void player_stop(void);
+
 
 bool read_frame(FILE *f, Frame **out_frame) {
+    ESP_LOGI(TAG2, "read_frame() called - simulated fail for test");
+    /*
     uint32_t timestamp_ms;
     uint16_t num_leds_changed;
     if (fread(&timestamp_ms, sizeof(uint32_t), 1, f) != 1 ||
@@ -118,10 +123,15 @@ bool read_frame(FILE *f, Frame **out_frame) {
     }
 
     *out_frame = frame;
-    return true;
+    return true;*/
+    return false;
 }
 
 void initialize() {
+
+
+    ESP_LOGI(TAG1, "Skipped SD card init for testing...");
+    /*
     LED_play = xSemaphoreCreateBinary();
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = true,
@@ -146,7 +156,7 @@ void initialize() {
     slot_config.host_id = host.slot;
 
     ESP_ERROR_CHECK(esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, &card));
-    sdmmc_card_print_info(stdout, card);
+    sdmmc_card_print_info(stdout, card);*/
 }
 
 void end_release() {
@@ -157,6 +167,7 @@ void end_release() {
 bool IRAM_ATTR led_timer_isr(void *arg) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(LED_play, &xHigherPriorityTaskWoken);
+    ESP_EARLY_LOGI(TAG3, "led_timer_isr: Semaphore given from ISR");
     return xHigherPriorityTaskWoken == pdTRUE;
 }
 
@@ -187,32 +198,51 @@ void stop_led_timer() {
 }
 
 void refill_task(void *arg) {
+    ESP_LOGI(TAG2, "Refill task started");
     FrameQueue *queue = (FrameQueue *)arg;
-    FILE *f = fopen("/sdcard/table.bin", "rb");
-    if (!f || fread(&file_header, sizeof(FileHeader), 1, f) != 1) {
-        vTaskDelete(NULL);
-    }
+    // FILE *f = fopen("/sdcard/table.bin", "rb");
+    // if (!f || fread(&file_header, sizeof(FileHeader), 1, f) != 1) {
+    //     vTaskDelete(NULL);
+    // }
     while (1) {
         if (queue->size < 2) {
             Frame *frame = NULL;
-            if (read_frame(f, &frame)) frame_queue_push(queue, frame);
-            else break;
+            // if (read_frame(f, &frame)) frame_queue_push(queue, frame);
+            if (read_frame(NULL, &frame)){
+                frame_queue_push(queue, frame);
+                ESP_LOGI(TAG2, "Pushed new frame");
+            } 
+            else {
+                ESP_LOGI(TAG2, "No more frames. Ending refill task.");
+                break;
+            } 
         }
-        if (queue->size == 2) play_start_flag = true;
+        if (queue->size == 2){
+
+            play_start_flag = true;
+            ESP_LOGI(TAG2, "play_start_flag set to true");
+        } 
         vTaskDelay(pdMS_TO_TICKS(5));
     }
-    fclose(f);
+    // fclose(f);
+    ESP_LOGI(TAG2, "Refill task exiting");
     vTaskDelete(NULL);
 }
 
 void playback_task(void *arg) {
+    ESP_LOGI(TAG3, "Playback task started");    
     FrameQueue *queue = (FrameQueue *)arg;
+
     while (1) {
         if (xSemaphoreTake(LED_play, portMAX_DELAY) == pdTRUE) {
+            ESP_LOGI(TAG3, "LED_play semaphore taken");
+
             Frame *frame = frame_queue_pop(queue);
             if (frame) {
+                ESP_LOGI(TAG3, "Popped frame - simulated display");
                 free(frame);
             } else {
+                ESP_LOGI(TAG3, "No more frames - stopping playback");
                 stop_led_timer();
                 player_stop();
                 vTaskDelete(NULL);
@@ -221,47 +251,63 @@ void playback_task(void *arg) {
     }
 }
 
+
 void player_play() {
     if (current_state == PLAYER_STOPPED) {
+        ESP_LOGI(TAG3, "player_play: Starting playback");
         current_state = PLAYER_PLAYING;
         init_frame_queue(&light_table);
         xTaskCreate(refill_task, "Refill", 4096, &light_table, 4, &refillTaskHandle);
         xTaskCreate(playback_task, "Playback", 4096, &light_table, 5, &playbackTaskHandle);
+
         while (!play_start_flag) vTaskDelay(1);
         start_led_timer(&light_table);
+    } else {
+        ESP_LOGW(TAG3, "player_play: Already playing or paused");
     }
 }
 
+
 void player_pause() {
     if (current_state == PLAYER_PLAYING || current_state == PLAYER_RESUMED) {
+        ESP_LOGI(TAG3, "player_pause: Pausing playback");
         vTaskSuspend(playbackTaskHandle);
+        vTaskSuspend(refillTaskHandle);
         current_state = PLAYER_PAUSED;
     }
 }
 
 void player_resume() {
     if (current_state == PLAYER_PAUSED) {
+        ESP_LOGI(TAG3, "player_resume: Resuming playback");
         vTaskResume(playbackTaskHandle);
+        vTaskResume(refillTaskHandle);
         current_state = PLAYER_RESUMED;
     }
 }
-
 void player_stop() {
     if (current_state != PLAYER_STOPPED) {
+        ESP_LOGI(TAG3, "player_stop: Stopping playback and cleaning up");
         current_state = PLAYER_STOPPED;
         stop_led_timer();
+
         if (refillTaskHandle) {
             vTaskDelete(refillTaskHandle);
             refillTaskHandle = NULL;
+            ESP_LOGI(TAG3, "Deleted refillTask");
         }
         if (playbackTaskHandle) {
             vTaskDelete(playbackTaskHandle);
             playbackTaskHandle = NULL;
+            ESP_LOGI(TAG3, "Deleted playbackTask");
         }
+
         while (light_table.size > 0) {
             Frame *f = frame_queue_pop(&light_table);
             free(f);
         }
+
+        ESP_LOGI(TAG3, "player_stop: Cleanup complete");
     }
 }
 
@@ -274,7 +320,7 @@ void app_main(void) {
     char cmd[16];
 
     printf("Enter command: play, pause, resume, stop, exit\n");
-
+    ESP_LOGI(TAG3, "System ready. Type command to begin: play, pause, resume, stop, exit");
     while (true) {
         printf("> ");
         fflush(stdout);  // 確保提示符輸出
