@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+
 #define TAG1 "sdspi"
 #define TAG2 "FrameReader"
 #define TAG3 "Player"
@@ -23,20 +25,25 @@
 #define PIN_NUM_CS    5
 #define SPI_DMA_CHAN  1
 
+#define MAX_STRIPE_NUM 150
+#define MAX_FRAME_NUM 2000
+
+
+uint16_t frame_stamps[MAX_FRAME_NUM];
+
+
 typedef struct FileHeader{
-    uint32_t num_frames;
-    uint16_t num_leds;
-    uint16_t reserved;
+    uint16_t num_stripes;
+    uint16_t length_stripes[ MAX_STRIPE_NUM ];
+    uint16_t fps;
 } FileHeader;
 
 typedef struct LEDUpdate {
-    uint16_t led_index;
-    uint8_t r, g, b;
+    uint8_t r, g, b ,a;
 } LEDUpdate;
 
 typedef struct Frame {
-    uint32_t timestamp_ms;
-    uint16_t num_leds_changed;
+    uint8_t fade;
     struct LEDUpdate updates[];
 } Frame;
 
@@ -86,6 +93,8 @@ FileHeader file_header;
 SemaphoreHandle_t LED_play;
 TaskHandle_t refillTaskHandle = NULL;
 TaskHandle_t playbackTaskHandle = NULL;
+bool play_ending_flag = false;
+
 
 sdmmc_card_t* card = NULL;
 const char mount_point[] = MOUNT_POINT;
@@ -101,12 +110,31 @@ typedef enum {
 volatile PlayerState current_state = PLAYER_STOPPED;
 void player_stop(void);
 
+bool read_file_header_txt(FILE *f, FileHeader *header) {
+    if (!f || !header) return false;
+
+    // 1. 讀取 num_stripes
+    if (fscanf(f, "%hu", &header->num_stripes) != 1) return false;
+    if (header->num_stripes > MAX_STRIPE_NUM) return false;
+
+    // 2. 讀取 length_stripes[]
+    for (int i = 0; i < header->num_stripes; ++i) {
+        if (fscanf(f, "%hu", &header->length_stripes[i]) != 1) return false;
+    }
+
+    // 3. 讀取 fps
+    if (fscanf(f, "%hu", &header->fps) != 1) return false;
+
+    return true;
+}
+
+
 
 bool read_frame(FILE *f, Frame **out_frame) {
     ESP_LOGI(TAG2, "read_frame() called - simulated fail for test");
     /*
     uint32_t timestamp_ms;
-    uint16_t num_leds_changed;
+    
     if (fread(&timestamp_ms, sizeof(uint32_t), 1, f) != 1 ||
         fread(&num_leds_changed, sizeof(uint16_t), 1, f) != 1)
         return false;
@@ -125,6 +153,45 @@ bool read_frame(FILE *f, Frame **out_frame) {
     *out_frame = frame;
     return true;*/
     return false;
+}
+
+bool read_frame_txt(FILE *f, Frame **out_frame) {
+    if (!f || !out_frame) return false;
+
+    // 計算總共需要讀多少顆 LED
+    uint32_t total_leds = 0;
+    // for (int i = 0; i < file_header.num_stripes; ++i) {
+    //     total_leds += file_header.length_stripes[i];
+    // }
+    total_leds = file_header.num_stripes;
+    
+    // 讀取 fade 值（單行）
+    int fade_int = 0;
+    if (fscanf(f, "%d", &fade_int) != 1) return false;
+    uint8_t fade = (fade_int != 0);  // 轉換為 0 或 1
+
+    // 分配記憶體：Frame + updates[]
+    size_t frame_size = sizeof(Frame) + total_leds * sizeof(LEDUpdate);
+    Frame *frame = malloc(frame_size);
+    if (!frame) return false;
+
+    frame->fade = fade;
+
+    // 開始讀取每個 LED 的 RGBA
+    for (uint32_t i = 0; i < total_leds; ++i) {
+        int r, g, b, a;
+        if (fscanf(f, "%d %d %d %d", &r, &g, &b, &a) != 4) {
+            free(frame);
+            return false;
+        }
+        frame->updates[i].r = (uint8_t)r;
+        frame->updates[i].g = (uint8_t)g;
+        frame->updates[i].b = (uint8_t)b;
+        frame->updates[i].a = (uint8_t)a;
+    }
+
+    *out_frame = frame;
+    return true;
 }
 
 void initialize() {
@@ -172,6 +239,10 @@ bool IRAM_ATTR led_timer_isr(void *arg) {
 }
 
 void initialize_led_timer() {
+
+    // uint32_t ticks_per_frame = 1000000 / file_header.fps;
+    uint32_t ticks_per_frame = 1000000 / 10;
+
     timer_config_t config = {
         .divider = 80,
         .counter_dir = TIMER_COUNT_UP,
@@ -180,12 +251,12 @@ void initialize_led_timer() {
         .intr_type = TIMER_INTR_LEVEL
     };
     timer_init(TIMER_GROUP_0, TIMER_0, &config);
-    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, 20000);
+    timer_set_alarm_value(TIMER_GROUP_0, TIMER_0, ticks_per_frame);
     timer_enable_intr(TIMER_GROUP_0, TIMER_0);
     timer_isr_callback_add(TIMER_GROUP_0, TIMER_0, led_timer_isr, NULL, 0);
 }
 
-void start_led_timer(FrameQueue *queue) {
+void start_led_timer() {
     xSemaphoreGive(LED_play);
     timer_start(TIMER_GROUP_0, TIMER_0);
 }
@@ -197,13 +268,16 @@ void stop_led_timer() {
     timer_set_counter_value(TIMER_GROUP_0, TIMER_0, 0);
 }
 
+
+
+
+
+
 void refill_task(void *arg) {
     ESP_LOGI(TAG2, "Refill task started");
-    FrameQueue *queue = (FrameQueue *)arg;
-    // FILE *f = fopen("/sdcard/table.bin", "rb");
-    // if (!f || fread(&file_header, sizeof(FileHeader), 1, f) != 1) {
-    //     vTaskDelete(NULL);
-    // }
+    FrameQueue *queue = &light_table;
+    FILE *f  = (FILE *)arg;
+
     while (1) {
         if (queue->size < 2) {
             Frame *frame = NULL;
@@ -226,7 +300,7 @@ void refill_task(void *arg) {
     }
     // fclose(f);
     ESP_LOGI(TAG2, "Refill task exiting");
-    vTaskDelete(NULL);
+    while(1)vTaskDelay(1);
 }
 
 void playback_task(void *arg) {
@@ -243,25 +317,27 @@ void playback_task(void *arg) {
                 free(frame);
             } else {
                 ESP_LOGI(TAG3, "No more frames - stopping playback");
-                stop_led_timer();
-                player_stop();
-                vTaskDelete(NULL);
+                // stop_led_timer();
+                // player_stop();
+                
+                play_ending_flag = true;
+                // vTaskDelete(NULL);
             }
         }
     }
 }
 
 
-void player_play() {
+void player_play(FILE *f) {
     if (current_state == PLAYER_STOPPED) {
         ESP_LOGI(TAG3, "player_play: Starting playback");
         current_state = PLAYER_PLAYING;
-        init_frame_queue(&light_table);
-        xTaskCreate(refill_task, "Refill", 4096, &light_table, 4, &refillTaskHandle);
+        
+        xTaskCreate(refill_task, "Refill", 4096,f , 4, &refillTaskHandle);
         xTaskCreate(playback_task, "Playback", 4096, &light_table, 5, &playbackTaskHandle);
 
-        while (!play_start_flag) vTaskDelay(1);
-        start_led_timer(&light_table);
+        // while (!play_start_flag) vTaskDelay(1);
+        start_led_timer();
     } else {
         ESP_LOGW(TAG3, "player_play: Already playing or paused");
     }
@@ -291,12 +367,12 @@ void player_stop() {
         current_state = PLAYER_STOPPED;
         stop_led_timer();
 
-        if (refillTaskHandle) {
+        if (refillTaskHandle != NULL) {
             vTaskDelete(refillTaskHandle);
             refillTaskHandle = NULL;
             ESP_LOGI(TAG3, "Deleted refillTask");
         }
-        if (playbackTaskHandle) {
+        if (playbackTaskHandle != NULL) {
             vTaskDelete(playbackTaskHandle);
             playbackTaskHandle = NULL;
             ESP_LOGI(TAG3, "Deleted playbackTask");
@@ -313,22 +389,43 @@ void player_stop() {
 
 void app_main(void) {
     initialize();
-    initialize_led_timer();
+    
     LED_play = xSemaphoreCreateBinary();
     init_frame_queue(&light_table);
+    FILE *f = NULL;
 
+    // FILE *f = fopen("table. txt", "rb");
+    // if (read_file_header_txt(f, &file_header)) {
+    //     printf("Stripes: %d, FPS: %d\n", file_header.num_stripes, file_header.fps);
+    //     for (int i = 0; i < file_header.num_stripes; ++i) {
+    //         printf("Length[%d] = %d\n", i, file_header.length_stripes[i]);
+    //     }
+    // }
+    
+
+
+
+    initialize_led_timer();
+
+    
     char cmd[16];
-
-    printf("Enter command: play, pause, resume, stop, exit\n");
+    int cnt = 0;
+    ESP_LOGI(TAG3, "Enter command: play, pause, resume, stop, exit\n");
     ESP_LOGI(TAG3, "System ready. Type command to begin: play, pause, resume, stop, exit");
     while (true) {
-        printf("> ");
-        fflush(stdout);  // 確保提示符輸出
+        ESP_LOGI(TAG3, "> ");
+        
+        if(cnt==0)strcpy(cmd, "play");
+        else if(cnt==1)strcpy(cmd, "pause");
+        else if(cnt==2)strcpy(cmd, "resume");
+        else if(cnt==3)strcpy(cmd, "pause");
+        else if(cnt==4)strcpy(cmd, "stop");
 
-        if (scanf("%15s", cmd) != 1) continue;
-
-        if (strcmp(cmd, "play") == 0) {
-            player_play();
+        if(play_ending_flag){
+            player_stop();
+        }
+        else if (strcmp(cmd, "play") == 0) {
+            player_play(f);
         } else if (strcmp(cmd, "pause") == 0) {
             player_pause();
         } else if (strcmp(cmd, "resume") == 0) {
@@ -336,13 +433,16 @@ void app_main(void) {
         } else if (strcmp(cmd, "stop") == 0) {
             player_stop();
         } else if (strcmp(cmd, "exit") == 0) {
-            player_stop();
+            // player_stop();
             break;
         } else {
-            printf("Unknown command: %s\n", cmd);
+            ESP_LOGI(TAG3, "Unknown command: %s\n", cmd);
         }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        ESP_LOGI(TAG3, "now: %s\n", cmd);
+        cnt++; 
     }
 
     end_release();
-    printf("Exited.\n");
+    ESP_LOGI(TAG3, "Exited.\n");
 }
