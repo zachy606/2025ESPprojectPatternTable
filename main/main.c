@@ -89,34 +89,48 @@ static void unmount_sdcard(void) {
 static LightdanceReader g_reader;
 
 int cnt = 0;
+int fps = 40;
+int reader_index = 0;
+FrameData fd_test;
+
+bool suspend_detect = false;
+
+
+static TaskHandle_t s_playback_task = NULL;
+static void playback_task(void *arg);
+
+
 
 static bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data)
 {
     cnt++;
-    ESP_LOGI("IRAMATTR", "cnt %d",cnt);
-    return false;
+    if(suspend_detect){
+        suspend_detect = false;
+        xTaskResumeFromISR(s_playback_task );
+        return false;
+    }
+    
+    return true;
 }
 
 
-// static void playback_task(void *arg) {
-//     while (g_state != STATE_EXITING) {
-//         if (xSemaphoreTake(g_play_sem, pdMS_TO_TICKS(100)) == pdTRUE) {
-//             if (g_state == STATE_RUNNING) {
-//                 FrameData fd;
-//                 if (FrameBufferPlayer_play(&g_player, &fd)) {
-//                     // output_frame_to_leds(&fd);
-//                     // 播完補一幀，維持雙緩衝
-//                     FrameBufferPlayer_fill(&g_player);
-//                 } else {
-//                     // 播放完
-//                     ESP_LOGI(TAG, "All frames played.");
-//                     g_state = STATE_STOPPED;
-//                 }
-//             }
-//         }
-//     }
-//     vTaskDelete(NULL);
-// }
+static void playback_task(void *arg) {
+
+    while(1){
+
+        // print_framedata(&fd_test ,&g_reader);
+    
+        if ((cnt+1) *(1000/fps) >= g_reader.frame_times[reader_index]){
+            ESP_LOGE("playback","change frame");
+            reader_index++;
+            LightdanceReader_read_frame_go_through(&g_reader,&fd_test);
+            ESP_LOGE("playback","READ finish");
+        }
+        suspend_detect = true;
+        vTaskSuspend(NULL);
+    }
+
+}
 
 
 
@@ -136,7 +150,7 @@ void app_main(void) {
         unmount_sdcard();
         return;
     }
-    if (!LightdanceReader_index_frames(&g_reader, "data.txt")) {
+    if (!LightdanceReader_index_frames(&g_reader, "8data.txt")) {
         ESP_LOGE(TAG, "Failed to index data.txt");
         unmount_sdcard();
         return;
@@ -148,7 +162,8 @@ void app_main(void) {
              g_reader.fps);
     fflush(stdout);
 
-
+    LightdanceReader_read_frame_at(&g_reader,reader_index,"8data.txt",&fd_test);
+    print_framedata(&fd_test ,&g_reader);
     //gptimer
     gptimer_handle_t gptimer = NULL;
     gptimer_config_t timer_config = {
@@ -169,15 +184,18 @@ void app_main(void) {
     ESP_LOGI(TAG, "Start timer, auto-reload at alarm event");
     gptimer_alarm_config_t alarm_config2 = {
         .reload_count = 0,
-        .alarm_count = 1000000, // period = 1s
+        .alarm_count = 1000000/fps, // period = 1s
         .flags.auto_reload_on_alarm = true,
     };
     ESP_ERROR_CHECK(gptimer_set_alarm_action(gptimer, &alarm_config2));
     ESP_ERROR_CHECK(gptimer_start(gptimer));
+    xTaskCreate(playback_task, "playback_task", 4096, NULL, 5, &s_playback_task );
     ESP_LOGI(TAG, "Start");
     
-    vTaskDelay(pdMS_TO_TICKS(4000));
-    
+    while(reader_index < LightdanceReader_get_total_frames(&g_reader) ){
+        
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
     
 
     ESP_ERROR_CHECK(gptimer_stop(gptimer));
