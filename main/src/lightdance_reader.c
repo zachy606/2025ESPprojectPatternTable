@@ -1,6 +1,5 @@
 #include "lightdance_reader.h"
 #include "esp_log.h"
-#include "frame_buffer_player.h"
 #define TAG "LD_READER"
 
 
@@ -87,7 +86,7 @@ bool LightdanceReader_index_frames(LightdanceReader *self, const char *data_file
     return true;
 }
 
-void LightdanceReader_read_frame_at(LightdanceReader *self, int index ,const char *data_file,FrameData *framedata) {
+void LightdanceReader_read_frame_at(LightdanceReader *self,const int index ,const char *data_file,FrameData *framedata) {
 
     char path[128];
     snprintf(path, sizeof(path), "%s/%s", self->mount_point, data_file);

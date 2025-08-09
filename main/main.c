@@ -16,13 +16,6 @@
 #include "driver/sdspi_host.h"
 
 #include "lightdance_reader.h"
-#include "frame_buffer_player.h"
-#include "timer_array.h"
-
-
-#include "lightdance_reader.h"
-#include "frame_buffer_player.h"
-#include "timer_array.h"
 
 
 
@@ -91,12 +84,13 @@ static LightdanceReader g_reader;
 int cnt = 0;
 int fps = 40;
 int reader_index = 0;
-FrameData fd_test;
+FrameData fd_test[2];
 
-bool suspend_detect = false;
-
+bool suspend_detect_playback = false;
+bool suspend_detect_refill = false;
 
 static TaskHandle_t s_playback_task = NULL;
+static TaskHandle_t s_refill_task = NULL;
 static void playback_task(void *arg);
 
 
@@ -104,9 +98,19 @@ static void playback_task(void *arg);
 static bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data)
 {
     cnt++;
-    if(suspend_detect){
-        suspend_detect = false;
+    // print_framedata(&fd_test[reader_index%2] ,&g_reader);
+    if(suspend_detect_playback){
+        suspend_detect_playback = false;
         xTaskResumeFromISR(s_playback_task );
+    }
+    
+    if ((cnt+1) *(1000/fps) >= g_reader.frame_times[reader_index] ){
+        if(suspend_detect_refill){
+            
+            xTaskResumeFromISR(s_refill_task );
+            suspend_detect_refill = false;
+        }
+        
         return false;
     }
     
@@ -114,24 +118,41 @@ static bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const
 }
 
 
-static void playback_task(void *arg) {
+static void refill_task(void *arg) {
 
+    suspend_detect_refill = true;
+    vTaskSuspend(NULL);
     while(1){
 
         // print_framedata(&fd_test ,&g_reader);
-    
-        if ((cnt+1) *(1000/fps) >= g_reader.frame_times[reader_index]){
-            ESP_LOGE("playback","change frame");
-            reader_index++;
-            LightdanceReader_read_frame_go_through(&g_reader,&fd_test);
-            ESP_LOGE("playback","READ finish");
+        ESP_LOGE("refill","change frame");
+        ESP_LOGI("IRAM", "%" PRIu32 "",g_reader.frame_times[reader_index]);
+        reader_index++;
+        if (reader_index+1 < LightdanceReader_get_total_frames(&g_reader)){
+            ESP_LOGE("refill","refill");
+            
+            LightdanceReader_read_frame_go_through(&g_reader,&fd_test[(reader_index-1)%2]);
+  
         }
-        suspend_detect = true;
+        ESP_LOGE("refill","READ finish");
+        suspend_detect_refill = true;
         vTaskSuspend(NULL);
     }
 
 }
 
+
+static void playback_task(void *arg) {
+
+    
+    while(1){
+        // ESP_LOGE("playback","refresh");
+        // print_framedata(&fd_test[reader_index%2] ,&g_reader);
+        suspend_detect_playback = true;
+        vTaskSuspend(NULL);
+    }
+
+}
 
 
 
@@ -162,8 +183,9 @@ void app_main(void) {
              g_reader.fps);
     fflush(stdout);
 
-    LightdanceReader_read_frame_at(&g_reader,reader_index,"8data.txt",&fd_test);
-    print_framedata(&fd_test ,&g_reader);
+    LightdanceReader_read_frame_at(&g_reader,reader_index,"8data.txt",&fd_test[reader_index%2]);
+    LightdanceReader_read_frame_go_through(&g_reader,&fd_test[(reader_index+1)%2]);
+    // print_framedata(&fd_test[(reader_index+1)%2] ,&g_reader);
     //gptimer
     gptimer_handle_t gptimer = NULL;
     gptimer_config_t timer_config = {
@@ -190,6 +212,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(gptimer_set_alarm_action(gptimer, &alarm_config2));
     ESP_ERROR_CHECK(gptimer_start(gptimer));
     xTaskCreate(playback_task, "playback_task", 4096, NULL, 5, &s_playback_task );
+    xTaskCreate(refill_task, "refill_task", 4096, NULL, 5, &s_refill_task );
     ESP_LOGI(TAG, "Start");
     
     while(reader_index < LightdanceReader_get_total_frames(&g_reader) ){

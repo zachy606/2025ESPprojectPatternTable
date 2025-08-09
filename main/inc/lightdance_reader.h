@@ -38,7 +38,7 @@ void print_framedata(const FrameData *frame_data,const LightdanceReader *self);
 void LightdanceReader_init(LightdanceReader *self, const char *mount_point);
 bool LightdanceReader_load_times(LightdanceReader *self, const char *time_file);
 bool LightdanceReader_index_frames(LightdanceReader *self, const char *data_file);
-void LightdanceReader_read_frame_at(LightdanceReader *self, int index,const char *data_file,FrameData *framedata);
+void LightdanceReader_read_frame_at(LightdanceReader *self, const int index,const char *data_file,FrameData *framedata);
 void LightdanceReader_read_frame_go_through(LightdanceReader *self,FrameData *framedata);
 uint32_t *LightdanceReader_get_time_array(LightdanceReader *self);
 int LightdanceReader_get_total_frames(const LightdanceReader *self);

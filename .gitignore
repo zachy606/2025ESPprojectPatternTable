@@ -1,3 +1,6 @@
 .cache/
 build/
 sdkconfig
+.vscode/
+noneed/
+sdkconfig.old
