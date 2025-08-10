@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "sdcard.h"
 
 
 #define MAX_PARTS 32
@@ -30,6 +31,7 @@ typedef struct {
     int frame_offsets[MAX_FRAMES];       // byte offset of each frame
 
     const char *mount_point;
+
 } LightdanceReader;
 
 
