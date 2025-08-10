@@ -1,7 +1,7 @@
 #include "player.h"
 
 
-void player_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t *card ){
+void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t *card ){
     p-> cnt = 0;
     p->  fps = 40;
     p->  reader_index = 0;
@@ -14,7 +14,6 @@ void player_init(player *p, const char *mount_point,const char *time_data, const
     p-> s_refill_task = NULL;
 
     p-> gptimer = NULL;
-
     LightdanceReader_init(&p->Reader, mount_point);
 
     if (!LightdanceReader_load_times(&p->Reader, time_data)) {
@@ -37,6 +36,22 @@ void player_init(player *p, const char *mount_point,const char *time_data, const
 
 }
 
+
+void player_var_init(player *p){
+    p->  cnt = 0;
+    p->  fps = 40;
+    p->  reader_index = 0;
+
+
+    p->  suspend_detect_playback = false;
+    p->  suspend_detect_refill = false;
+
+    p-> s_playback_task = NULL;
+    p-> s_refill_task = NULL;
+
+    p-> gptimer = NULL;
+
+}
 
 
 bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *self)
@@ -141,12 +156,27 @@ void player_start(player *p){
     xTaskCreate(refill_task, "refill_task", 4096, p, 5, &p->s_refill_task );
 }
 
+void player_pause(player *p){
+    ESP_ERROR_CHECK(gptimer_stop(p->gptimer));
+    ESP_ERROR_CHECK(gptimer_disable(p->gptimer));
+  
+    ESP_LOGI("PLAYER", "pause");
+}
+
+void player_resume(player *p){
+    ESP_ERROR_CHECK(gptimer_enable(p->gptimer));
+    ESP_ERROR_CHECK(gptimer_start(p->gptimer));
+    ESP_LOGI("PLAYER", "resume");
+}
+
 
 void player_stop(player *p){
-    ESP_ERROR_CHECK(gptimer_stop(p->gptimer));
-    ESP_LOGI("TIMER", "stop");
-    ESP_ERROR_CHECK(gptimer_disable(p->gptimer));
-    ESP_LOGI("TIMER", "disable");
+
+    ESP_LOGI("PLAYER", "stop");
     ESP_ERROR_CHECK(gptimer_del_timer(p->gptimer));
     ESP_LOGI("TIMER", "delete");
+    ESP_LOGI("FILE", "delete");
+    vTaskDelete(p->s_playback_task);
+    vTaskDelete(p->s_refill_task);
+    ESP_LOGI("TASK", "delete");
 }

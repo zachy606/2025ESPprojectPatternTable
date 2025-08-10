@@ -143,7 +143,7 @@ void LightdanceReader_read_frame_go_through(LightdanceReader *self,FrameData *fr
         framedata->colors[i][3] = a;
     }
     self->index++;
-    return ;
+    return;
 }
 
 

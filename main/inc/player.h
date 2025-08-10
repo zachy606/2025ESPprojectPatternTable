@@ -29,9 +29,9 @@ typedef struct {
 
 } player;
 
-void player_init(player *self, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t *_card );
-
-void timer_init(player *self);
+void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t *_card );
+void player_var_init(player *p);
+void timer_init(player *p);
 
 
 bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *self);
@@ -39,6 +39,7 @@ bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptime
 void refill_task(void *arg) ;
 void playback_task(void *arg);
 
-void player_start(player *self);
-
-void player_stop(player *self);
+void player_start(player *p);
+void player_resume(player *p);
+void player_pause(player *p);
+void player_stop(player *p);
