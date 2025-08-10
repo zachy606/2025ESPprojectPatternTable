@@ -12,6 +12,7 @@ static PlayerState State = STATE_IDLE;
 
 // command list  start  pause  resume  stop  exit
 // please copy above commend and paste directly into cmd to use
+// if commend is splitted, please paste it again
 
 
 void app_main(void) {

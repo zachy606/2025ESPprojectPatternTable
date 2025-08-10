@@ -31,7 +31,6 @@ typedef struct {
     uint32_t frame_times[MAX_FRAMES];       // in milliseconds
     int frame_offsets[MAX_FRAMES];       // byte offset of each frame
 
-    const char *mount_point;
     sdmmc_card_t *card;
     
 
