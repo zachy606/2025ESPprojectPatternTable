@@ -10,13 +10,13 @@
 static player P;
 static PlayerState State = STATE_IDLE;
 
-// command list start pause resume stop exit
-
+// command list  start  pause  resume  stop  exit
+// please copy above commend and paste directly into cmd to use
 
 
 void app_main(void) {
 
-    player_reader_init(&P,MOUNT_POINT,TIME_DATA,FRAME_DATA);
-    command_loop(&P,&State,MOUNT_POINT);
+    player_reader_init(&P);
+    command_loop(&P,&State);
     
 }

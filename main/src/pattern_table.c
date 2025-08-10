@@ -18,8 +18,8 @@ void print_framedata(const FrameData *frame_data){
 
 
 
-void PatternTable_init(PatternTable *self, const char *mount_point) {
-    self->mount_point = mount_point;
+void PatternTable_init(PatternTable *self) {
+    
     self->data_fp = NULL;
     self->time_fp = NULL;
     self->total_parts = 0;
@@ -29,9 +29,9 @@ void PatternTable_init(PatternTable *self, const char *mount_point) {
     self->index = 0;
 }
 
-bool PatternTable_load_times(PatternTable *self, const char *time_file) {
+bool PatternTable_load_times(PatternTable *self) {
     char path[PATH_BUF_LEN];
-    snprintf(path, sizeof(path), "%s/%s", self->mount_point, time_file);
+    snprintf(path, sizeof(path), "%s/%s", MOUNT_POINT, TIME_DATA);
     self->time_fp = fopen(path, "r");
     if (!self->time_fp) {
         ESP_LOGE(TAG, "Failed to open %s", path);
@@ -49,9 +49,9 @@ bool PatternTable_load_times(PatternTable *self, const char *time_file) {
     return true;
 }
 
-bool PatternTable_index_frames(PatternTable *self, const char *data_file) {
+bool PatternTable_index_frames(PatternTable *self) {
     char path[PATH_BUF_LEN];
-    snprintf(path, sizeof(path), "%s/%s", self->mount_point, data_file);
+    snprintf(path, sizeof(path), "%s/%s", MOUNT_POINT, FRAME_DATA);
     self->data_fp = fopen(path, "r");
     if (!self->data_fp) {
         ESP_LOGE(TAG, "Failed to open %s", path);
@@ -91,7 +91,7 @@ bool PatternTable_index_frames(PatternTable *self, const char *data_file) {
     return true;
 }
 
-void PatternTable_read_frame_at(PatternTable *self,const int index ,const char *data_file,FrameData *framedata) {
+void PatternTable_read_frame_at(PatternTable *self,const int index ,FrameData *framedata) {
 
     // char path[128];
     // snprintf(path, sizeof(path), "%s/%s", self->mount_point, data_file);

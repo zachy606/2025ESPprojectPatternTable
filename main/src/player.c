@@ -5,7 +5,7 @@
 
 
 
-void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data){
+void player_reader_init(player *p){
     p-> cnt = 0;
     p->  reader_index = 0;
     p->  tick_saved = 0;
@@ -21,22 +21,22 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
     p-> gptimer = NULL;
 
     // 1) 掛載 SD
-    if (!mount_sdcard(&p->Reader.card,mount_point)) {
+    if (!mount_sdcard(&p->Reader.card)) {
         ESP_LOGE("SD", "SD mount failed. Abort.");
         return;
     }
 
-    PatternTable_init(&p->Reader, mount_point);
+    PatternTable_init(&p->Reader);
 
 
-    if (!PatternTable_load_times(&p->Reader, time_data)) {
+    if (!PatternTable_load_times(&p->Reader)) {
         ESP_LOGE("Player init", "Failed to load times.txt");
-        unmount_sdcard(&p->Reader.card,mount_point);
+        unmount_sdcard(&p->Reader.card);
         return;
     }
-    if (!PatternTable_index_frames(&p->Reader, frame_data)) {
+    if (!PatternTable_index_frames(&p->Reader)) {
         ESP_LOGE("Player init", "Failed to index data.txt");
-        unmount_sdcard(&p->Reader.card,mount_point);
+        unmount_sdcard(&p->Reader.card);
         return;
     }
 

@@ -16,5 +16,5 @@ void cmd_start(player *p, PlayerState *state, int start_frame_index);
 void cmd_pause(player *p, PlayerState *state);
 void cmd_resume(player *p, PlayerState *state);
 void cmd_stop(player *p, PlayerState *state);
-void cmd_exit(player *p, PlayerState *state,const char *mount_point);
-void command_loop(player *p, PlayerState *state,const char *mount_point);
+void cmd_exit(player *p, PlayerState *state);
+void command_loop(player *p, PlayerState *state);

@@ -6,5 +6,5 @@
 #include "esp_vfs_fat.h"
 #include "driver/sdspi_host.h"
 
-bool mount_sdcard(sdmmc_card_t **g_card, const char *mount_point);
-void unmount_sdcard(sdmmc_card_t **g_card,const char *mount_point);
+bool mount_sdcard(sdmmc_card_t **g_card);
+void unmount_sdcard(sdmmc_card_t **g_card);

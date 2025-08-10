@@ -19,7 +19,7 @@ void cmd_start(player *p, PlayerState *state, int start_frame_index){
         // p->reader_index = start_frame_index;
         player_var_init(p);
         ESP_LOGI(TAG,"start init");
-        PatternTable_read_frame_at(&p->Reader,p->reader_index,"8data.txt",&p->fd_test[p->reader_index%2]);
+        PatternTable_read_frame_at(&p->Reader,p->reader_index,&p->fd_test[p->reader_index%2]);
         PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]);
         
         
@@ -79,14 +79,14 @@ void cmd_stop(player *p, PlayerState *state){
         ESP_LOGI(TAG,"now state %d",*state );
     }
 }
-void cmd_exit(player *p, PlayerState *state, const char *mount_point){
+void cmd_exit(player *p, PlayerState *state){
     
     
     if(*state == STATE_STOPPED){
 
         *state = STATE_EXITING;
         fclose(p->Reader.data_fp);
-        unmount_sdcard(&p->Reader.card,mount_point);
+        unmount_sdcard(&p->Reader.card);
         ESP_LOGI(TAG, "Main exits.");
 
     }
@@ -97,7 +97,7 @@ void cmd_exit(player *p, PlayerState *state, const char *mount_point){
 }
 
 
-void command_loop(player *p, PlayerState *state,const char *mount_point) {
+void command_loop(player *p, PlayerState *state) {
     char line[CMD_LINE_BUF];
     ESP_LOGI(TAG, "Enter command: start | pause | resume | stop | exit");
 
@@ -138,7 +138,7 @@ void command_loop(player *p, PlayerState *state,const char *mount_point) {
         } else if (strcmp(cmd, "stop") == 0) {
             cmd_stop(p,state);
         } else if (strcmp(cmd, "exit") == 0) {
-            cmd_exit(p,state,mount_point);
+            cmd_exit(p,state);
         } else if (cmd[0] != '\0') {
             ESP_LOGW(TAG, "Unknown cmd: %s", line);
         }
