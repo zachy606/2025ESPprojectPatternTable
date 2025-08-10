@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include <stdio.h>      
 #include <inttypes.h>
+#include "sdcard.h"
 #define TAG "LD_READER"
 
 

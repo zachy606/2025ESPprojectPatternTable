@@ -32,7 +32,7 @@ typedef struct {
 
 } player;
 
-void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t **card );
+void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data);
 void player_var_init(player *p);
 void timer_init(player *p);
 

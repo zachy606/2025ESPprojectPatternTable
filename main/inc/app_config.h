@@ -11,8 +11,13 @@
 // --- files / paths in pattern_table.c---
 #define PATH_BUF_LEN              128 //string buffer for file name
 
-// --- SD (可選，看你專案需求) in sdcard.c ---
+// --- SD (可選，看你專案需求) in sdcard.c---
 #define SD_SPI_MAX_FREQ_KHZ       26000
 #define SD_MAX_FILES              5
 #define SD_ALLOC_UNIT_SIZE        (16 * 1024)
 #define SD_MAX_TRANSFER_SIZE        (8 * 1024)
+
+// --- MAIN in main.c---
+#define MOUNT_POINT "/sdcard"
+#define TIME_DATA "200time.txt"
+#define FRAME_DATA "200data.txt"

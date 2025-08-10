@@ -1,9 +1,8 @@
 #pragma once
-
-#pragma once
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "sdmmc_cmd.h"
 
 #define MAX_PARTS 40
 // MAX_PARTS : MAX total num of led stripes + OFs
@@ -33,6 +32,8 @@ typedef struct {
     int frame_offsets[MAX_FRAMES];       // byte offset of each frame
 
     const char *mount_point;
+    sdmmc_card_t *card;
+    
 
 } PatternTable;
 
