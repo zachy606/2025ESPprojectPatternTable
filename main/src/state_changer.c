@@ -1,5 +1,6 @@
 #include "state_changer.h"
 #include "app_config.h"
+#include "player.h"
 #include "sdcard.h"          // for un/mount helpers
 #include "esp_log.h"
 
@@ -11,6 +12,7 @@
 
 
 void cmd_start(player *p, PlayerState *state, int start_frame_index){
+
 
     if(*state == STATE_IDLE||*state == STATE_STOPPED){
         *state = STATE_RUNNING;
@@ -106,6 +108,7 @@ void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char
             if(p->reader_index >= PatternTable_get_total_frames(&p->Reader) && *state != STATE_STOPPED){
 
                 strcpy(line, "stop");  
+                ESP_LOGI(TAG,"RUN END %d",*state );
                 
             }else{
                  vTaskDelay(pdMS_TO_TICKS(CMD_IDLE_POLL_DELAY_MS));
@@ -113,17 +116,13 @@ void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char
                  continue;
             }
 
+
         }
         
 
         char *cmd = strtok(line, " ");
         char *cmd_frame_index = strtok(NULL, " ");
         int start_frame_index = 0;
-
-        if(p->reader_index >= PatternTable_get_total_frames(&p->Reader) ){
-
-            strcpy(cmd, "stop");  
-        }
 
         if (strcmp(cmd, "start") == 0) {
             if (cmd_frame_index != NULL) {

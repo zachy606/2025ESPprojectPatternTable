@@ -31,6 +31,5 @@ void app_main(void) {
 
     
     command_loop(&P,&State,&g_card,MOUNT_POINT);
-    ESP_LOGE(TAG, "code finish");
     
 }

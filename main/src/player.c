@@ -8,6 +8,8 @@
 void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t **card ){
     p-> cnt = 0;
     p->  reader_index = 0;
+    p->  tick_saved = 0;
+    
 
 
     p->  suspend_detect_playback = false;
@@ -33,7 +35,7 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
 
     ESP_LOGE("Player init", "FPS %d",p->Reader.fps);
     if(p->Reader.fps==0) p->Reader.fps = DEFAULT_FPS;
-
+    p->period_us = TIMER_RESOLUTION_HZ / p->Reader.fps ;
     ESP_LOGE("Player init", "FPS %d",p->Reader.fps);
 
 
@@ -50,7 +52,7 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
 void player_var_init(player *p){
     
     p->  cnt = 0;
-
+    p->  tick_saved = 0;
     p->  reader_index = 0;
 
 
@@ -64,28 +66,35 @@ void player_var_init(player *p){
 
 }
 
+void timer_alarm_fps_task(void *arg){
 
-bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *self)
-{
-    player *p = (player *)self;    
-    p->cnt++;
-    // print_framedata(&fd_test[reader_index%2] ,&g_reader);
-    if(p->suspend_detect_playback){
+    player *p = (player *)arg;
+    uint64_t tick_now = 0;
+
+    while(1){
+        
+        ESP_ERROR_CHECK(gptimer_get_raw_count(p->gptimer, &tick_now));
+        if( tick_now / p->period_us > p->cnt){
+            p->cnt++;
+        }
+
+        if(p->suspend_detect_playback){
         p->suspend_detect_playback = false;
-        xTaskResumeFromISR(p->s_playback_task );
-    }
-    
-    if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
-        if(p->suspend_detect_refill){
-            
-            xTaskResumeFromISR(p->s_refill_task );
-            p->suspend_detect_refill = false;
+            xTaskResumeFromISR(p->s_playback_task );
         }
         
-        return false;
+        if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
+            if(p->suspend_detect_refill){
+                
+                xTaskResumeFromISR(p->s_refill_task );
+                p->suspend_detect_refill = false;
+            }
+            // ESP_LOGE("alarm","refill");
+            
+        }
+        vTaskDelay(1); 
     }
-    
-    return true;
+
 }
 
 
@@ -143,25 +152,16 @@ void timer_init(player *p){
 
     ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &p->gptimer));
 
-    gptimer_event_callbacks_t cbs = {
-        .on_alarm = example_timer_on_alarm_cb_v1,
-    };
-    ESP_ERROR_CHECK(gptimer_register_event_callbacks(p->gptimer, &cbs,p));
     ESP_LOGI("TIMER", "Enable timer");
     ESP_ERROR_CHECK(gptimer_enable(p->gptimer));
 
-    
-    gptimer_alarm_config_t alarm_config2 = {
-        .reload_count = 0,
-        .alarm_count = TIMER_RESOLUTION_HZ/p->Reader.fps, // period = 1s
-        .flags.auto_reload_on_alarm = true,
-    };
-    ESP_ERROR_CHECK(gptimer_set_alarm_action(p->gptimer, &alarm_config2));
     ESP_LOGI("TIMER", "Start timer, auto-reload at alarm event");
 }
 
 
 void player_start(player *p){
+
+    xTaskCreate(timer_alarm_fps_task, "timer_alarm_fps_task", 4096, p, 4, &p->s_timer_alarm_fps_task );
     ESP_ERROR_CHECK(gptimer_start(p->gptimer));
     ESP_LOGI("PLAYER", "Start");
     xTaskCreate(playback_task, "playback_task", 4096, p, 5, &p->s_playback_task );
@@ -169,21 +169,26 @@ void player_start(player *p){
 }
 
 void player_pause(player *p){
+
+    vTaskSuspend(p->s_timer_alarm_fps_task);
     ESP_ERROR_CHECK(gptimer_stop(p->gptimer));
     ESP_ERROR_CHECK(gptimer_disable(p->gptimer));
-  
+    
     ESP_LOGI("PLAYER", "pause");
 }
 
 void player_resume(player *p){
     ESP_ERROR_CHECK(gptimer_enable(p->gptimer));
     ESP_ERROR_CHECK(gptimer_start(p->gptimer));
+    vTaskResume(p->s_timer_alarm_fps_task);
     ESP_LOGI("PLAYER", "resume");
 }
 
 
 void player_stop(player *p){
 
+
+    vTaskDelete(p->s_timer_alarm_fps_task);
     ESP_LOGI("PLAYER", "stop");
     ESP_ERROR_CHECK(gptimer_del_timer(p->gptimer));
     ESP_LOGI("TIMER", "delete");

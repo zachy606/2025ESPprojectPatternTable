@@ -20,9 +20,12 @@ typedef struct {
     bool suspend_detect_playback ;
     bool suspend_detect_refill ;
 
+    uint64_t tick_saved;
+    uint64_t period_us;
+
     TaskHandle_t s_playback_task;
     TaskHandle_t s_refill_task ;
-
+    TaskHandle_t s_timer_alarm_fps_task;
     PatternTable Reader;
     FrameData fd_test[2];
     gptimer_handle_t gptimer;
@@ -34,7 +37,7 @@ void player_var_init(player *p);
 void timer_init(player *p);
 
 
-bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *self);
+void timer_alarm_fps_task(void *arg);
 
 void refill_task(void *arg) ;
 void playback_task(void *arg);
