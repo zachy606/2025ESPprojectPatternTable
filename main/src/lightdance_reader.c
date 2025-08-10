@@ -4,7 +4,7 @@
 
 
 
-void print_framedata(const FrameData *frame_data,const LightdanceReader *self){
+void print_framedata(const FrameData *frame_data){
     ESP_LOGI("FD","fade %d",(int)frame_data->fade);
     // for(int i=0;i<self->total_leds;i++){
     for(int i=0;i<3;i++){
@@ -82,15 +82,15 @@ bool LightdanceReader_index_frames(LightdanceReader *self, const char *data_file
     }
 
     ESP_LOGI(TAG, "Indexed %d frames", self->total_frames);
-    fclose(self->data_fp);
+    // fclose(self->data_fp);
     return true;
 }
 
 void LightdanceReader_read_frame_at(LightdanceReader *self,const int index ,const char *data_file,FrameData *framedata) {
 
-    char path[128];
-    snprintf(path, sizeof(path), "%s/%s", self->mount_point, data_file);
-    self->data_fp = fopen(path, "r");
+    // char path[128];
+    // snprintf(path, sizeof(path), "%s/%s", self->mount_point, data_file);
+    // self->data_fp = fopen(path, "r");
 
 
     ESP_LOGI(TAG, "Read %d frames", index);
@@ -148,7 +148,7 @@ void LightdanceReader_read_frame_go_through(LightdanceReader *self,FrameData *fr
 
 
 
-uint32_t *LightdanceReader_get_time_array(LightdanceReader *self) {
+uint32_t *LightdanceReader_get_time_array(const LightdanceReader *self) {
     return self->frame_times;
 }
 

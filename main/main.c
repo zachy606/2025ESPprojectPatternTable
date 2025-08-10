@@ -36,7 +36,7 @@
 
 static sdmmc_card_t *g_card = NULL;
 
-static bool mount_sdcard(void) {
+static bool mount_sdcard(sdmmc_card_t *g_card) {
     esp_err_t ret;
 
     spi_bus_config_t bus_cfg = {
@@ -45,11 +45,12 @@ static bool mount_sdcard(void) {
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 4000,
+        .max_transfer_sz = 8*1024,
     };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_CHAN));
 
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+    host.max_freq_khz = 26000;  //not sure
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = PIN_NUM_CS;
     slot_config.host_id = SPI2_HOST;
@@ -71,7 +72,7 @@ static bool mount_sdcard(void) {
     return true;
 }
 
-static void unmount_sdcard(void) {
+static void unmount_sdcard(sdmmc_card_t *g_card) {
     if (g_card) {
         esp_vfs_fat_sdcard_unmount(MOUNT_POINT, g_card);
         g_card = NULL;
@@ -147,7 +148,7 @@ static void playback_task(void *arg) {
     
     while(1){
         // ESP_LOGE("playback","refresh");
-        // print_framedata(&fd_test[reader_index%2] ,&g_reader);
+        // print_framedata(&fd_test[reader_index%2]);
         suspend_detect_playback = true;
         vTaskSuspend(NULL);
     }
@@ -158,7 +159,7 @@ static void playback_task(void *arg) {
 
 void app_main(void) {
     // 1) 掛載 SD
-    if (!mount_sdcard()) {
+    if (!mount_sdcard(g_card)) {
         ESP_LOGE(TAG, "SD mount failed. Abort.");
         return;
     }
@@ -168,12 +169,12 @@ void app_main(void) {
 
     if (!LightdanceReader_load_times(&g_reader, "times.txt")) {
         ESP_LOGE(TAG, "Failed to load times.txt");
-        unmount_sdcard();
+        unmount_sdcard(g_card);
         return;
     }
     if (!LightdanceReader_index_frames(&g_reader, "8data.txt")) {
         ESP_LOGE(TAG, "Failed to index data.txt");
-        unmount_sdcard();
+        unmount_sdcard(g_card);
         return;
     }
 
@@ -185,7 +186,7 @@ void app_main(void) {
 
     LightdanceReader_read_frame_at(&g_reader,reader_index,"8data.txt",&fd_test[reader_index%2]);
     LightdanceReader_read_frame_go_through(&g_reader,&fd_test[(reader_index+1)%2]);
-    // print_framedata(&fd_test[(reader_index+1)%2] ,&g_reader);
+    // print_framedata(&fd_test[(reader_index+1)%2]);
     //gptimer
     gptimer_handle_t gptimer = NULL;
     gptimer_config_t timer_config = {
@@ -229,6 +230,6 @@ void app_main(void) {
     ESP_LOGI("TIMER", "delete");
 
 
-    unmount_sdcard();
+    unmount_sdcard(g_card);
     ESP_LOGI(TAG, "Main exits.");
 }
