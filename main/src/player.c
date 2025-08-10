@@ -1,7 +1,7 @@
 #include "player.h"
 
 
-void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t *card ){
+void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t **card ){
     p-> cnt = 0;
     p->  fps = 40;
     p->  reader_index = 0;
