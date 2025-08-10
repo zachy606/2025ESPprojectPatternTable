@@ -1,9 +1,12 @@
+#include "app_config.h"
 #include "player.h"
+#include "sdcard.h"
+#include <stdio.h>                 // for fflush()
+
 
 
 void player_reader_init(player *p, const char *mount_point,const char *time_data, const char *frame_data, sdmmc_card_t **card ){
     p-> cnt = 0;
-    p->  fps = 40;
     p->  reader_index = 0;
 
 
@@ -14,22 +17,29 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
     p-> s_refill_task = NULL;
 
     p-> gptimer = NULL;
-    LightdanceReader_init(&p->Reader, mount_point);
+    PatternTable_init(&p->Reader, mount_point);
 
-    if (!LightdanceReader_load_times(&p->Reader, time_data)) {
+
+    if (!PatternTable_load_times(&p->Reader, time_data)) {
         ESP_LOGE("Player init", "Failed to load times.txt");
         unmount_sdcard(card,mount_point);
         return;
     }
-    if (!LightdanceReader_index_frames(&p->Reader, frame_data)) {
+    if (!PatternTable_index_frames(&p->Reader, frame_data)) {
         ESP_LOGE("Player init", "Failed to index data.txt");
         unmount_sdcard(card,mount_point);
         return;
     }
 
+    ESP_LOGE("Player init", "FPS %d",p->Reader.fps);
+    if(p->Reader.fps==0) p->Reader.fps = DEFAULT_FPS;
+
+    ESP_LOGE("Player init", "FPS %d",p->Reader.fps);
+
+
     ESP_LOGE("Player init", "Total frames=%d, total_leds=%d, fps=%d",
-             LightdanceReader_get_total_frames(&p->Reader),
-             LightdanceReader_get_total_leds(&p->Reader),
+             PatternTable_get_total_frames(&p->Reader),
+             PatternTable_get_total_leds(&p->Reader),
              p->Reader.fps);
     fflush(stdout);
 
@@ -38,8 +48,9 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
 
 
 void player_var_init(player *p){
+    
     p->  cnt = 0;
-    p->  fps = 40;
+
     p->  reader_index = 0;
 
 
@@ -64,7 +75,7 @@ bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptime
         xTaskResumeFromISR(p->s_playback_task );
     }
     
-    if ((p->cnt+1) *(1000/p->fps) >= p->Reader.frame_times[p->reader_index] ){
+    if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
         if(p->suspend_detect_refill){
             
             xTaskResumeFromISR(p->s_refill_task );
@@ -90,10 +101,10 @@ void refill_task(void *arg) {
         ESP_LOGE("refill","change frame");
         ESP_LOGI("IRAM", "%" PRIu32 "",p->Reader.frame_times[p->reader_index]);
         p->reader_index++;
-        if (p->reader_index+1 < LightdanceReader_get_total_frames(&p->Reader)){
+        if (p->reader_index+1 < PatternTable_get_total_frames(&p->Reader)){
             ESP_LOGE("refill","refill");
             
-            LightdanceReader_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]);
+            PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]);
   
         }
         ESP_LOGE("refill","READ finish");
@@ -127,7 +138,7 @@ void timer_init(player *p){
     gptimer_config_t timer_config = {
         .clk_src = GPTIMER_CLK_SRC_DEFAULT, // 选择默认的时钟源
         .direction = GPTIMER_COUNT_UP,      // 计数方向为向上计数
-        .resolution_hz = 1 * 1000 * 1000,   // 分辨率为 1 MHz，即 1 次滴答为 1 微秒
+        .resolution_hz = TIMER_RESOLUTION_HZ,   // 分辨率为 1 MHz，即 1 次滴答为 1 微秒
     };
 
     ESP_ERROR_CHECK(gptimer_new_timer(&timer_config, &p->gptimer));
@@ -139,13 +150,14 @@ void timer_init(player *p){
     ESP_LOGI("TIMER", "Enable timer");
     ESP_ERROR_CHECK(gptimer_enable(p->gptimer));
 
-    ESP_LOGI("TIMER", "Start timer, auto-reload at alarm event");
+    
     gptimer_alarm_config_t alarm_config2 = {
         .reload_count = 0,
-        .alarm_count = 1000000/p->fps, // period = 1s
+        .alarm_count = TIMER_RESOLUTION_HZ/p->Reader.fps, // period = 1s
         .flags.auto_reload_on_alarm = true,
     };
     ESP_ERROR_CHECK(gptimer_set_alarm_action(p->gptimer, &alarm_config2));
+    ESP_LOGI("TIMER", "Start timer, auto-reload at alarm event");
 }
 
 

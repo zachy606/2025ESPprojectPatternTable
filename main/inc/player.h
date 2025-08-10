@@ -1,20 +1,20 @@
 #pragma once
 
-#include "driver/gptimer.h"
-#include "esp_log.h"
-#include "esp_err.h"
+#include <stdbool.h>
+#include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "lightdance_reader.h"
-#include <inttypes.h>
-#include "sdmmc_cmd.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "driver/gptimer.h"     // for gptimer_handle_t
+#include "pattern_table.h"      // for PatternTable, FrameData
+#include "sdmmc_cmd.h"          // for sdmmc_card_t
 
 
 typedef struct {
 
     int cnt ;
-    int fps ;
     int reader_index;
 
     bool suspend_detect_playback ;
@@ -23,7 +23,7 @@ typedef struct {
     TaskHandle_t s_playback_task;
     TaskHandle_t s_refill_task ;
 
-    LightdanceReader Reader;
+    PatternTable Reader;
     FrameData fd_test[2];
     gptimer_handle_t gptimer;
 

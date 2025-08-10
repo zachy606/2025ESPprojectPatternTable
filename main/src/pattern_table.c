@@ -1,5 +1,8 @@
-#include "lightdance_reader.h"
+#include"app_config.h"
+#include "pattern_table.h"
 #include "esp_log.h"
+#include <stdio.h>      
+#include <inttypes.h>
 #define TAG "LD_READER"
 
 
@@ -14,18 +17,19 @@ void print_framedata(const FrameData *frame_data){
 
 
 
-void LightdanceReader_init(LightdanceReader *self, const char *mount_point) {
+void PatternTable_init(PatternTable *self, const char *mount_point) {
     self->mount_point = mount_point;
     self->data_fp = NULL;
     self->time_fp = NULL;
     self->total_parts = 0;
-    self->fps = 30;
+    self->fps = 0;
     self->total_frames = 0;
     self->total_leds = 0;
+    self->index = 0;
 }
 
-bool LightdanceReader_load_times(LightdanceReader *self, const char *time_file) {
-    char path[128];
+bool PatternTable_load_times(PatternTable *self, const char *time_file) {
+    char path[PATH_BUF_LEN];
     snprintf(path, sizeof(path), "%s/%s", self->mount_point, time_file);
     self->time_fp = fopen(path, "r");
     if (!self->time_fp) {
@@ -44,8 +48,8 @@ bool LightdanceReader_load_times(LightdanceReader *self, const char *time_file) 
     return true;
 }
 
-bool LightdanceReader_index_frames(LightdanceReader *self, const char *data_file) {
-    char path[128];
+bool PatternTable_index_frames(PatternTable *self, const char *data_file) {
+    char path[PATH_BUF_LEN];
     snprintf(path, sizeof(path), "%s/%s", self->mount_point, data_file);
     self->data_fp = fopen(path, "r");
     if (!self->data_fp) {
@@ -64,7 +68,7 @@ bool LightdanceReader_index_frames(LightdanceReader *self, const char *data_file
 
     // 3. fps
     if (fscanf(self->data_fp, "%d", &self->fps) != 1) return false;
-
+    ESP_LOGE(TAG, "FPS %d", self->fps);
     // 4. index each frame
     self->total_frames = 0;
     while (!feof(self->data_fp) && self->total_frames < MAX_FRAMES) {
@@ -86,7 +90,7 @@ bool LightdanceReader_index_frames(LightdanceReader *self, const char *data_file
     return true;
 }
 
-void LightdanceReader_read_frame_at(LightdanceReader *self,const int index ,const char *data_file,FrameData *framedata) {
+void PatternTable_read_frame_at(PatternTable *self,const int index ,const char *data_file,FrameData *framedata) {
 
     // char path[128];
     // snprintf(path, sizeof(path), "%s/%s", self->mount_point, data_file);
@@ -117,7 +121,7 @@ void LightdanceReader_read_frame_at(LightdanceReader *self,const int index ,cons
     return ;
 }
 
-void LightdanceReader_read_frame_go_through(LightdanceReader *self,FrameData *framedata) {
+void PatternTable_read_frame_go_through(PatternTable *self,FrameData *framedata) {
 
 
 
@@ -148,14 +152,14 @@ void LightdanceReader_read_frame_go_through(LightdanceReader *self,FrameData *fr
 
 
 
-uint32_t *LightdanceReader_get_time_array(const LightdanceReader *self) {
+const uint32_t *PatternTable_get_time_array(const PatternTable *self) {
     return self->frame_times;
 }
 
-int LightdanceReader_get_total_frames(const LightdanceReader *self) {
+int PatternTable_get_total_frames(const PatternTable *self) {
     return self->total_frames;
 }
 
-int LightdanceReader_get_total_leds(const LightdanceReader *self) {
+int PatternTable_get_total_leds(const PatternTable *self) {
     return self->total_leds;
 }

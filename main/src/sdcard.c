@@ -1,3 +1,4 @@
+#include"app_config.h"
 #include "sdcard.h"
 #define TAG "SDcard"
 
@@ -17,20 +18,20 @@ bool mount_sdcard(sdmmc_card_t **g_card,const char *mount_point) {
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 8*1024,
+        .max_transfer_sz = SD_MAX_TRANSFER_SIZE,
     };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_CHAN));
 
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-    host.max_freq_khz = 26000;  //not sure
+    host.max_freq_khz = SD_SPI_MAX_FREQ_KHZ ;  //not sure
     sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_config.gpio_cs = PIN_NUM_CS;
     slot_config.host_id = SPI2_HOST;
 
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,
-        .max_files = 5,
-        .allocation_unit_size = 16 * 1024
+        .max_files = SD_MAX_FILES,
+        .allocation_unit_size = SD_ALLOC_UNIT_SIZE
     };
 
     ret = esp_vfs_fat_sdspi_mount(mount_point, &host, &slot_config, &mount_config, g_card);

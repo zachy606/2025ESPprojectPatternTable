@@ -1,4 +1,4 @@
-#include "lightdance_reader.h"
+#include "pattern_table.h"
 #include "player.h"
 #include "sdcard.h"
 #include "state_changer.h"
@@ -14,6 +14,9 @@ static player P;
 static PlayerState State = STATE_IDLE;
 
 // command list start pause resume stop exit
+//issue 1
+//solved 1 2 4 5 6
+
 
 void app_main(void) {
     // 1) 掛載 SD
@@ -29,4 +32,5 @@ void app_main(void) {
     
     command_loop(&P,&State,&g_card,MOUNT_POINT);
     ESP_LOGE(TAG, "code finish");
+    
 }

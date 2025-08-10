@@ -1,8 +1,8 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#pragma once
+
+
 #include "player.h"
-#include "sdcard.h"
+#include "sdmmc_cmd.h"
 
 typedef enum {
     STATE_IDLE = 0,

@@ -1,4 +1,13 @@
 #include "state_changer.h"
+#include "app_config.h"
+#include "sdcard.h"          // for un/mount helpers
+#include "esp_log.h"
+
+#include <stdio.h>           // fgets, printf
+#include <string.h>          // strtok, strcmp, strcspn
+#include <stdlib.h>          // atoi
+
+#define TAG "cmd"
 
 
 void cmd_start(player *p, PlayerState *state, int start_frame_index){
@@ -7,16 +16,16 @@ void cmd_start(player *p, PlayerState *state, int start_frame_index){
         *state = STATE_RUNNING;
         // p->reader_index = start_frame_index;
         player_var_init(p);
-        ESP_LOGI("cmd","start init");
-        LightdanceReader_read_frame_at(&p->Reader,p->reader_index,"8data.txt",&p->fd_test[p->reader_index%2]);
-        LightdanceReader_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]);
+        ESP_LOGI(TAG,"start init");
+        PatternTable_read_frame_at(&p->Reader,p->reader_index,"8data.txt",&p->fd_test[p->reader_index%2]);
+        PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]);
         
         
         timer_init(p);
         player_start(p);
     }
     else{
-        ESP_LOGI("cmd","wonrg state not allow to start");
+        ESP_LOGI(TAG,"wonrg state not allow to start");
     }
 
 }
@@ -30,8 +39,8 @@ void cmd_pause(player *p, PlayerState *state){
 
     }
     else{
-        ESP_LOGI("cmd","wonrg state not allow to paused");
-        ESP_LOGI("cmd","now state %d",*state );
+        ESP_LOGI(TAG,"wonrg state not allow to paused");
+        ESP_LOGI(TAG,"now state %d",*state );
     }
 
 }
@@ -45,8 +54,8 @@ void cmd_resume(player *p, PlayerState *state){
 
     }
     else{
-        ESP_LOGI("cmd","wonrg state not allow to resume");
-        ESP_LOGI("cmd","now state %d",*state );
+        ESP_LOGI(TAG,"wonrg state not allow to resume");
+        ESP_LOGI(TAG,"now state %d",*state );
     }
 }
 
@@ -64,8 +73,8 @@ void cmd_stop(player *p, PlayerState *state){
         player_stop(p);
     }
     else{
-        ESP_LOGI("cmd","wonrg state not allow to stop");
-        ESP_LOGI("cmd","now state %d",*state );
+        ESP_LOGI(TAG,"wonrg state not allow to stop");
+        ESP_LOGI(TAG,"now state %d",*state );
     }
 }
 void cmd_exit(player *p, PlayerState *state,sdmmc_card_t **g_card, const char *mount_point){
@@ -76,30 +85,30 @@ void cmd_exit(player *p, PlayerState *state,sdmmc_card_t **g_card, const char *m
         *state = STATE_EXITING;
         fclose(p->Reader.data_fp);
         unmount_sdcard(g_card,mount_point);
-        ESP_LOGI("cmd", "Main exits.");
+        ESP_LOGI(TAG, "Main exits.");
 
     }
     else{
-        ESP_LOGI("cmd","wonrg state not allow to exit");
-        ESP_LOGI("cmd","now state %d",*state );
+        ESP_LOGI(TAG,"wonrg state not allow to exit");
+        ESP_LOGI(TAG,"now state %d",*state );
     }
 }
 
 
 void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char *mount_point) {
-    char line[32];
-    ESP_LOGI("cmd", "Enter command: start | pause | resume | stop | exit");
+    char line[CMD_LINE_BUF];
+    ESP_LOGI(TAG, "Enter command: start | pause | resume | stop | exit");
 
     while (*state != STATE_EXITING) {
         // 注意：idf.py monitor 下，stdin 可直接讀。若你要用 UART，請改成 UART API。
         if (fgets(line, sizeof(line), stdin) == NULL) {
             
-            if(p->reader_index >= LightdanceReader_get_total_frames(&p->Reader) && *state != STATE_STOPPED){
+            if(p->reader_index >= PatternTable_get_total_frames(&p->Reader) && *state != STATE_STOPPED){
 
                 strcpy(line, "stop");  
                 
             }else{
-                 vTaskDelay(pdMS_TO_TICKS(10));
+                 vTaskDelay(pdMS_TO_TICKS(CMD_IDLE_POLL_DELAY_MS));
             
                  continue;
             }
@@ -111,7 +120,7 @@ void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char
         char *cmd_frame_index = strtok(NULL, " ");
         int start_frame_index = 0;
 
-        if(p->reader_index >= LightdanceReader_get_total_frames(&p->Reader) ){
+        if(p->reader_index >= PatternTable_get_total_frames(&p->Reader) ){
 
             strcpy(cmd, "stop");  
         }
@@ -131,7 +140,7 @@ void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char
         } else if (strcmp(cmd, "exit") == 0) {
             cmd_exit(p,state,g_card,mount_point);
         } else if (cmd[0] != '\0') {
-            ESP_LOGW("cmd", "Unknown cmd: %s", line);
+            ESP_LOGW(TAG, "Unknown cmd: %s", line);
         }
 
     }
