@@ -335,24 +335,35 @@ void PatternTable_read_frame_go_through(PatternTable *self, FrameData *framedata
     self->index++;
 }
 
-void find_led_index_ms(PatternTable *self, uint32_t t_ms)
+void find_frame_index_ms(PatternTable *self, uint32_t t_ms)
 {
-    if (self->total_frames == 0) return ;
+    if (self->total_frames == 0) return;
 
-    size_t lo = 0, hi = self->total_frames; // 右開區間 [lo, hi)
+    size_t lo = 0, hi = self->total_frames - 1; // time_table 長度 = total_frames-1
+
     while (lo < hi) {
         size_t mid = lo + ((hi - lo) >> 1);
         if (self->frame_times[mid] <= t_ms) {
-            lo = mid + 1;      // 還可以往右找
+            lo = mid + 1;  // 往右找
         } else {
-            hi = mid;          // 縮到左半邊
+            hi = mid;      // 往左找
         }
     }
-    // 迴圈結束時 lo 是第一個 > t_ms 的位置，因此 lo-1 是最後一個 <= t_ms
-    self->index = lo-1;
-    ESP_LOGI("find led","start from frame %d",self->index);
-}
 
+    // lo 是第一個切換時間 > t_ms 的位置
+    // 這個位置就是下一幀的 index，所以當前幀是 lo
+    // 例如 t=1500 → lo=1 → 當前幀 index=1（frame1 與 frame2 要載入）
+    self->index = lo;
+
+    // 避免超界（最後一幀）
+    if (self->index >= self->total_frames - 1) {
+        self->index = self->total_frames - 2;
+    }
+
+    ESP_LOGI("find frame",
+             "t_ms=%" PRIu32 ", load frame %d & %d, start from frame %d",
+             t_ms, self->index, self->index + 1, self->index);
+}
 
 const uint32_t *PatternTable_get_time_array(const PatternTable *self) {
     return self->frame_times;

@@ -14,6 +14,9 @@ static PlayerState State = STATE_IDLE;
 // please copy above commend and paste directly into cmd to use
 // if commend is splitted, please paste it again
 
+// commad update 
+// now can input start time to start at any time(ms)
+// ex : start 12500 (need waiting if time is far from 0) 
 
 void app_main(void) {
 

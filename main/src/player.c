@@ -62,7 +62,7 @@ void player_var_init(player *p){
     
     p->  cnt = 0;
     p->  tick_saved = 0;
-    p->  reader_index = 0;
+    p->  reader_index = p->Reader.index;
 
 
     p->  suspend_detect_playback = false;
