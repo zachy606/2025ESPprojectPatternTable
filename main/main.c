@@ -19,7 +19,7 @@ static PlayerState State = STATE_IDLE;
 // ex : start 12500 (need waiting if time is far from 0) 
 
 void app_main(void) {
-
+    esp_log_level_set("*", ESP_LOG_WARN);
     player_reader_init(&P);
     command_loop(&P,&State);
     

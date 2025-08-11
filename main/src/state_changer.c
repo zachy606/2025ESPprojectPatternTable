@@ -28,7 +28,7 @@ void cmd_start(player *p, PlayerState *state, uint32_t start_time){
         player_start(p);
     }
     else{
-        ESP_LOGI(TAG,"wonrg state not allow to start");
+        ESP_LOGW(TAG,"wonrg state not allow to start");
     }
 
 }
@@ -42,7 +42,7 @@ void cmd_pause(player *p, PlayerState *state){
 
     }
     else{
-        ESP_LOGI(TAG,"wonrg state not allow to paused");
+        ESP_LOGW(TAG,"wonrg state not allow to paused");
         ESP_LOGI(TAG,"now state %d",*state );
     }
 
@@ -57,7 +57,7 @@ void cmd_resume(player *p, PlayerState *state){
 
     }
     else{
-        ESP_LOGI(TAG,"wonrg state not allow to resume");
+        ESP_LOGW(TAG,"wonrg state not allow to resume");
         ESP_LOGI(TAG,"now state %d",*state );
     }
 }
@@ -76,7 +76,7 @@ void cmd_stop(player *p, PlayerState *state){
         player_stop(p);
     }
     else{
-        ESP_LOGI(TAG,"wonrg state not allow to stop");
+        ESP_LOGW(TAG,"wonrg state not allow to stop");
         ESP_LOGI(TAG,"now state %d",*state );
     }
 }
@@ -92,7 +92,7 @@ void cmd_exit(player *p, PlayerState *state){
 
     }
     else{
-        ESP_LOGI(TAG,"wonrg state not allow to exit");
+        ESP_LOGW(TAG,"wonrg state not allow to exit");
         ESP_LOGI(TAG,"now state %d",*state );
     }
 }
@@ -100,7 +100,7 @@ void cmd_exit(player *p, PlayerState *state){
 
 void command_loop(player *p, PlayerState *state) {
     char line[CMD_LINE_BUF];
-    ESP_LOGI(TAG, "Enter command: start | pause | resume | stop | exit");
+    ESP_LOGW(TAG, "Enter command: start | pause | resume | stop | exit");
 
     while (*state != STATE_EXITING) {
         // 注意：idf.py monitor 下，stdin 可直接讀。若你要用 UART，請改成 UART API。

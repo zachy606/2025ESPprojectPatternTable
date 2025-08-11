@@ -30,25 +30,25 @@ void player_reader_init(player *p){
 
 
     if (!PatternTable_load_times(&p->Reader)) {
-        ESP_LOGE("Player init", "Failed to load times.txt");
+        ESP_LOGI("Player init", "Failed to load times.txt");
         unmount_sdcard(&p->Reader.card);
         return;
     }
     if (!PatternTable_index_frames(&p->Reader)) {
-        ESP_LOGE("Player init", "Failed to index data.txt");
+        ESP_LOGI("Player init", "Failed to index data.txt");
         unmount_sdcard(&p->Reader.card);
         return;
     }
 
-    ESP_LOGE("Player init", "FPS %d",p->Reader.fps);
+    ESP_LOGI("Player init", "FPS %d",p->Reader.fps);
     if(p->Reader.fps==0) p->Reader.fps = DEFAULT_FPS;
 
     p->period_us = TIMER_RESOLUTION_HZ / p->Reader.fps ;
 
-    ESP_LOGE("Player init", "FPS %d",p->Reader.fps);
+    ESP_LOGI("Player init", "FPS %d",p->Reader.fps);
 
 
-    ESP_LOGE("Player init", "Total frames=%d, total_leds=%d, fps=%d",
+    ESP_LOGI("Player init", "Total frames=%d, total_leds=%d, fps=%d",
              PatternTable_get_total_frames(&p->Reader),
              PatternTable_get_total_leds(&p->Reader),
              p->Reader.fps);
@@ -116,16 +116,16 @@ void refill_task(void *arg) {
     while(1){
 
         // print_framedata(&fd_test ,&g_reader);
-        ESP_LOGE("refill","change frame");
+        ESP_LOGI("refill","change frame");
         ESP_LOGI("IRAM", "%" PRIu32 "",p->Reader.frame_times[p->reader_index]);
         p->reader_index++;
         if (p->reader_index+1 < PatternTable_get_total_frames(&p->Reader)){
-            ESP_LOGE("refill","refill");
+            ESP_LOGI("refill","refill");
             
             PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]);
   
         }
-        ESP_LOGE("refill","READ finish");
+        ESP_LOGI("refill","READ finish");
         p->suspend_detect_refill = true;
         vTaskSuspend(NULL);
     }
