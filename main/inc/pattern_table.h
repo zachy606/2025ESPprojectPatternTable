@@ -47,3 +47,5 @@ void PatternTable_read_frame_go_through( PatternTable *self,FrameData *framedata
 const uint32_t *PatternTable_get_time_array(const PatternTable *self);
 int PatternTable_get_total_frames(const PatternTable *self);
 int PatternTable_get_total_leds(const PatternTable *self);
+
+int find_le_index_ms(PatternTable *self, uint32_t t_ms);
