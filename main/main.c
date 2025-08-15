@@ -28,7 +28,7 @@ static PlayerState State = STATE_IDLE;
 //     // PatternTable_read_frame_at(&P->Reader,P.reader_index,&P->fd_test[&P->reader_index%2]);
 //     // PatternTable_read_frame_go_through(&P->Reader,&P->fd_test[(P->reader_index+1)%2]);
     
-}
+// }
 static char buf[8192];
 void app_main(void)
 {
