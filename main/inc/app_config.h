@@ -21,6 +21,6 @@
 
 // --- MAIN in main.c---
 #define MOUNT_POINT               "/sdcard"
-#define TIME_DATA                 "200time.txt"
-#define FRAME_DATA                "h200data.txt"
+#define TIME_DATA                 "800time.txt"
+#define FRAME_DATA                "h800data.txt"
 

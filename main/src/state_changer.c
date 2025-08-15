@@ -17,9 +17,10 @@ void cmd_start(player *p, PlayerState *state, uint32_t start_time){
     if(*state == STATE_IDLE||*state == STATE_STOPPED){
         *state = STATE_RUNNING;
         // p->reader_index = start_frame_index;
+        
         find_frame_index_ms(&p->Reader, start_time);
         player_var_init(p);
-        ESP_LOGI(TAG,"start init");
+        ESP_LOGW(TAG,"start init");
         PatternTable_read_frame_at(&p->Reader,p->reader_index,&p->fd_test[p->reader_index%2]);
         PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]);
         
