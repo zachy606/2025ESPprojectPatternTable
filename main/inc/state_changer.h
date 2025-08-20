@@ -12,6 +12,7 @@ typedef enum {
     STATE_EXITING
 } PlayerState;
 
+void cmd_init(player *p);
 void cmd_start(player *p, PlayerState *state, int start_frame_index);
 void cmd_pause(player *p, PlayerState *state);
 void cmd_resume(player *p, PlayerState *state);

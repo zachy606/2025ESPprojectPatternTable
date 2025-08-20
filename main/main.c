@@ -12,15 +12,14 @@ static PlayerState State = STATE_IDLE;
 
 // command list start pause resume stop exit
 //issue 1
-//solved 1 2 4 5 6
+//solved 1 2 3 4 5 6 7
 
 
 void app_main(void) {
 
-    player_reader_init(&P,MOUNT_POINT,TIME_DATA,FRAME_DATA);
-
-
     
+
+    cmd_init(&P);
     command_loop(&P,&State,MOUNT_POINT);
     ESP_LOGE(TAG, "code finish");
     

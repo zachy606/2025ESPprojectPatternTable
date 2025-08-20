@@ -10,18 +10,24 @@
 #define TAG "cmd"
 
 
+void cmd_init(player *p){
+
+    player_reader_init(p,MOUNT_POINT,TIME_DATA,FRAME_DATA);
+    player_var_init(p);
+    ESP_LOGI(TAG,"start init");
+    PatternTable_read_frame_at(&p->Reader,p->reader_index,&p->fd_test[p->reader_index%2]);
+    PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]);
+    
+    
+    timer_init(p);
+}
+
 void cmd_start(player *p, PlayerState *state, int start_frame_index){
 
     if(*state == STATE_IDLE||*state == STATE_STOPPED){
         *state = STATE_RUNNING;
         // p->reader_index = start_frame_index;
-        player_var_init(p);
-        ESP_LOGI(TAG,"start init");
-        PatternTable_read_frame_at(&p->Reader,p->reader_index,&p->fd_test[p->reader_index%2]);
-        PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]);
-        
-        
-        timer_init(p);
+
         player_start(p);
     }
     else{
