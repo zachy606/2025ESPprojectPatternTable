@@ -19,9 +19,11 @@ typedef struct {
 
     bool suspend_detect_playback ;
     bool suspend_detect_refill ;
+    bool suspend_detect_refresh ;
 
     TaskHandle_t s_playback_task;
     TaskHandle_t s_refill_task ;
+    TaskHandle_t s_refresh_task ;
 
     PatternTable Reader;
     FrameData fd_test[2];
@@ -38,6 +40,7 @@ bool example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptimer_alarm_ev
 
 void refill_task(void *arg) ;
 void playback_task(void *arg);
+void refresh_task(void *arg);
 
 void player_start(player *p);
 void player_resume(player *p);

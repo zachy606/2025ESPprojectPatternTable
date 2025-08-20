@@ -77,24 +77,56 @@ bool IRAM_ATTR example_timer_on_alarm_cb_v1(gptimer_handle_t timer, const gptime
     player *p = (player *)self;    
     p->cnt++;
     // print_framedata(&fd_test[reader_index%2] ,&g_reader);
-    if(p->suspend_detect_playback){
-        p->suspend_detect_playback = false;
-        xTaskResumeFromISR(p->s_playback_task );
-    }
-    
-    if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
-        if(p->suspend_detect_refill){
-            
-            xTaskResumeFromISR(p->s_refill_task );
-            p->suspend_detect_refill = false;
-        }
+    if(p->suspend_detect_refresh){
+        p->suspend_detect_refresh = false;
+        xTaskResumeFromISR(p->s_refresh_task );
         
-        return false;
+        return true;
     }
     
-    return true;
+    // if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
+    //     if(p->suspend_detect_refill){
+            
+    //         xTaskResumeFromISR(p->s_refill_task );
+    //         p->suspend_detect_refill = false;
+    //     }
+        
+    //     return false;
+    // }
+    ESP_LOGD("timer","failed to alarm");
+    return false;
 }
 
+
+void refresh_task(void *arg){
+    player *p = (player *)arg;    
+    p->suspend_detect_refresh = true;
+    vTaskSuspend(NULL);
+    while(1){
+        
+        /*
+        led light
+        */
+
+
+        if ((p->cnt+1) *(1000/p->Reader.fps) >= p->Reader.frame_times[p->reader_index] ){
+            // print_framedata(&fd_test ,&g_reader);
+            ESP_LOGE("refill","change frame");
+            ESP_LOGI("IRAM", "%" PRIu32 "",p->Reader.frame_times[p->reader_index]);
+            p->reader_index++;
+            if (p->reader_index+1 < PatternTable_get_total_frames(&p->Reader)){
+                ESP_LOGE("refill","refill");
+                
+                PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index-1)%2]);
+    
+            }
+            ESP_LOGE("refill","READ finish");
+            p->suspend_detect_refresh = true;
+            vTaskSuspend(NULL);
+        }
+        
+    }
+}
 
 void refill_task(void *arg) {
 
@@ -115,10 +147,10 @@ void refill_task(void *arg) {
   
         }
         ESP_LOGE("refill","READ finish");
-        p->suspend_detect_refill = true;
+        
         vTaskSuspend(NULL);
     }
-
+    p->suspend_detect_refill = true;
 }
 
 
@@ -171,8 +203,9 @@ void timer_init(player *p){
 void player_start(player *p){
     ESP_ERROR_CHECK(gptimer_start(p->gptimer));
     ESP_LOGI("PLAYER", "Start");
-    xTaskCreate(playback_task, "playback_task", 4096, p, 5, &p->s_playback_task );
-    xTaskCreate(refill_task, "refill_task", 4096, p, 5, &p->s_refill_task );
+    // xTaskCreate(playback_task, "playback_task", 4096, p, 5, &p->s_playback_task );
+    // xTaskCreate(refill_task, "refill_task", 4096, p, 5, &p->s_refill_task );
+    xTaskCreate(refresh_task, "refresh_task", 4096, p, 5, &p->s_refresh_task );
 }
 
 void player_pause(player *p){
