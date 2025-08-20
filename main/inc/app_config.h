@@ -16,3 +16,9 @@
 #define SD_MAX_FILES              5
 #define SD_ALLOC_UNIT_SIZE        (16 * 1024)
 #define SD_MAX_TRANSFER_SIZE        (8 * 1024)
+
+
+// --- MAIN in main.c---
+#define MOUNT_POINT "/sdcard"
+#define TIME_DATA "200time.txt"
+#define FRAME_DATA "200data.txt"

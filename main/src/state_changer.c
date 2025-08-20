@@ -77,14 +77,14 @@ void cmd_stop(player *p, PlayerState *state){
         ESP_LOGI(TAG,"now state %d",*state );
     }
 }
-void cmd_exit(player *p, PlayerState *state,sdmmc_card_t **g_card, const char *mount_point){
+void cmd_exit(player *p, PlayerState *state, const char *mount_point){
     
     
     if(*state == STATE_STOPPED){
 
         *state = STATE_EXITING;
         fclose(p->Reader.data_fp);
-        unmount_sdcard(g_card,mount_point);
+        unmount_sdcard(&p->Reader.card,mount_point);
         ESP_LOGI(TAG, "Main exits.");
 
     }
@@ -95,7 +95,7 @@ void cmd_exit(player *p, PlayerState *state,sdmmc_card_t **g_card, const char *m
 }
 
 
-void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char *mount_point) {
+void command_loop(player *p, PlayerState *state,const char *mount_point) {
     char line[CMD_LINE_BUF];
     ESP_LOGI(TAG, "Enter command: start | pause | resume | stop | exit");
 
@@ -103,7 +103,7 @@ void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char
         // 注意：idf.py monitor 下，stdin 可直接讀。若你要用 UART，請改成 UART API。
         if (fgets(line, sizeof(line), stdin) == NULL) {
             
-            if(p->reader_index >= PatternTable_get_total_frames(&p->Reader) && *state != STATE_STOPPED){
+            if(p->reader_index >= PatternTable_get_total_frames(&p->Reader) && *state != STATE_STOPPED){ // auto stop
 
                 strcpy(line, "stop");  
                 
@@ -120,11 +120,6 @@ void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char
         char *cmd_frame_index = strtok(NULL, " ");
         int start_frame_index = 0;
 
-        if(p->reader_index >= PatternTable_get_total_frames(&p->Reader) ){
-
-            strcpy(cmd, "stop");  
-        }
-
         if (strcmp(cmd, "start") == 0) {
             if (cmd_frame_index != NULL) {
                 start_frame_index = atoi(cmd_frame_index);
@@ -138,7 +133,7 @@ void command_loop(player *p, PlayerState *state,sdmmc_card_t **g_card,const char
         } else if (strcmp(cmd, "stop") == 0) {
             cmd_stop(p,state);
         } else if (strcmp(cmd, "exit") == 0) {
-            cmd_exit(p,state,g_card,mount_point);
+            cmd_exit(p,state,mount_point);
         } else if (cmd[0] != '\0') {
             ESP_LOGW(TAG, "Unknown cmd: %s", line);
         }

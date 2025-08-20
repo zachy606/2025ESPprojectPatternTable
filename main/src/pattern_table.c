@@ -1,5 +1,6 @@
 #include"app_config.h"
 #include "pattern_table.h"
+#include "sdcard.h"
 #include "esp_log.h"
 #include <stdio.h>      
 #include <inttypes.h>
