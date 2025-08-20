@@ -2,6 +2,7 @@
 #include "app_config.h"
 #include "sdcard.h"          // for un/mount helpers
 #include "esp_log.h"
+#include "testing.h"
 
 #include <stdio.h>           // fgets, printf
 #include <string.h>          // strtok, strcmp, strcspn
@@ -22,12 +23,22 @@ void cmd_init(player *p){
     timer_init(p);
 }
 
-void cmd_start(player *p, PlayerState *state, int start_frame_index){
+void cmd_start(player *p, PlayerState *state ,int delaytime, int delaylight){
 
     if(*state == STATE_IDLE||*state == STATE_STOPPED){
         *state = STATE_RUNNING;
         // p->reader_index = start_frame_index;
+        delaytime = 0;
+        delaylight = 0;
+        int64_t delay = perf_timer_start();
+        while(!perf_timer_cnt(delay,delaytime,"DELAY", "DELAYTIME")){
+            
+            if(perf_timer_cnt(delay,delaylight,"DELAY", "DELAYlight")){
 
+            }
+            vTaskDelay(10);
+        }
+        
         player_start(p);
     }
     else{
@@ -124,13 +135,13 @@ void command_loop(player *p, PlayerState *state,const char *mount_point) {
 
         char *cmd = strtok(line, " ");
         char *cmd_frame_index = strtok(NULL, " ");
-        int start_frame_index = 0;
+        
 
         if (strcmp(cmd, "start") == 0) {
-            if (cmd_frame_index != NULL) {
-                start_frame_index = atoi(cmd_frame_index);
-            }
-            cmd_start(p,state,start_frame_index);
+            // if (cmd_frame_index != NULL) {
+            //     start_frame_index = atoi(cmd_frame_index);
+            // }
+            cmd_start(p,state,0,0);
 
         } else if (strcmp(cmd, "pause") == 0) {
             cmd_pause(p,state);
