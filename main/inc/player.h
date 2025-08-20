@@ -43,3 +43,4 @@ void player_start(player *p);
 void player_resume(player *p);
 void player_pause(player *p);
 void player_stop(player *p);
+void gptimer_seek_to_ms(player *p, uint32_t t_ms);

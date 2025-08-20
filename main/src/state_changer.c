@@ -17,7 +17,7 @@ void cmd_start(player *p, PlayerState *state, int start_frame_index){
         // p->reader_index = start_frame_index;
         player_var_init(p);
         ESP_LOGI(TAG,"start init");
-        PatternTable_read_frame_at(&p->Reader,p->reader_index,"8data.txt",&p->fd_test[p->reader_index%2]);
+        PatternTable_read_frame_at(&p->Reader,p->reader_index,&p->fd_test[p->reader_index%2]);
         PatternTable_read_frame_go_through(&p->Reader,&p->fd_test[(p->reader_index+1)%2]);
         
         

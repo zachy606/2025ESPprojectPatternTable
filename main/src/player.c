@@ -27,12 +27,12 @@ void player_reader_init(player *p, const char *mount_point,const char *time_data
     PatternTable_init(&p->Reader, mount_point);
 
 
-    if (!PatternTable_load_times(&p->Reader, time_data)) {
+        if (!PatternTable_load_times(&p->Reader)) {
         ESP_LOGE("Player init", "Failed to load times.txt");
         unmount_sdcard(&p->Reader.card,mount_point);
         return;
     }
-    if (!PatternTable_index_frames(&p->Reader, frame_data)) {
+    if (!PatternTable_index_frames(&p->Reader)) {
         ESP_LOGE("Player init", "Failed to index data.txt");
         unmount_sdcard(&p->Reader.card,mount_point);
         return;
@@ -198,4 +198,23 @@ void player_stop(player *p){
     vTaskDelete(p->s_playback_task);
     vTaskDelete(p->s_refill_task);
     ESP_LOGI("TASK", "delete");
+}
+
+void gptimer_seek_to_ms(player *p, uint32_t t_ms)
+{
+    if (!p->gptimer){
+        ESP_LOGE("TIMER", "timer not init");
+        return ;
+    } 
+
+    // 將 ms 轉為 ticks：ticks = t_ms * (Hz / 1000)
+    // 用 64-bit 避免乘法溢位
+    uint64_t ticks = ((uint64_t)t_ms * TIMER_RESOLUTION_HZ) / 1000ULL;
+
+    // 最穩流程：先停 -> 設定 -> 再啟動
+    // （若已停止，stop 仍會回傳 OK）
+  
+
+    ESP_ERROR_CHECK(gptimer_set_raw_count(p->gptimer, ticks));
+    ESP_LOGI("TIMER","timer set ok");
 }
